@@ -1,0 +1,45 @@
+#
+# NOTE! Don't add files that are generated in specific
+# subdirectories here. Add them in the ".gitignore" file
+# in that subdirectory instead.
+#
+# NOTE! Please use 'git ls-files -i --exclude-standard'
+# command after changing this file, to see if there are
+# any tracked files which get ignored after the change.
+#
+# Normal rules (sorted alphabetically)
+#
+.*
+*.a
+*.bin
+*.bz2
+*.c.[012]*.*
+*.dtb*
+*.dtb.S
+*.dwo
+*.elf
+*.exe
+*.gcno
+*.gz
+*.i
+*.ko
+*.ll
+*.lst
+*.lz4
+*.lzma
+*.lzo
+*.mod.c
+*.o
+*.o.*
+*.order
+*.orig
+*.patch
+*.s
+*.so
+*.so.dbg
+*.su
+*.symtypes
+*.tar
+*.xz
+*~
+\#*#

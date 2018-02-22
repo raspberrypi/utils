@@ -106,7 +106,6 @@ while ($ARGV[0] =~ /^-/)
 	{
 		print STDERR ("* Unknown option '$arg'\n");
 		usage();
-		exit(1);
 	}
 }
 
@@ -136,6 +135,8 @@ foreach my $overlay (@ARGV)
 
 	push @overlays, $dt;
 }
+
+exit(0) if (!@overlays);
 
 if ($overlays[0]->{'plugin'})
 {
@@ -184,27 +185,24 @@ else
 	}
 }
 
-if (@overlays)
+if ($comment)
 {
-	if ($comment)
+	print('// redo: ovmerge -c');
+	foreach my $opt (@cmdline)
 	{
-		print('// redo: ovmerge -c');
-		foreach my $opt (@cmdline)
+		if ($opt =~ /\s/)
 		{
-			if ($opt =~ /\s/)
-			{
-				print(" '$opt'");
-			}
-			else
-			{
-				print(" $opt");
-			}
+			print(" '$opt'");
 		}
-		print("\n\n");
+		else
+		{
+			print(" $opt");
+		}
 	}
-
-	dtdump($overlays[0]);
+	print("\n\n");
 }
+
+dtdump($overlays[0]);
 
 exit(0);
 

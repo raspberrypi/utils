@@ -434,7 +434,7 @@ sub dtparam
 			while ($decl =~ /\G([=!+-])(\d+)/g)
 			{
 				my ($op, $num) = ($1, $2);
-				my $frag = get_node($dt, '/fragment@'.$num);
+				my $frag = get_node($dt, '/fragment-'.$num) || get_node($dt, '/fragment@'.$num);
 				die "* Param $param: no fragment $num\n" if (!$frag);
 				# Enable or disable the fragment as needed
 				if ($op eq '!')
@@ -1131,7 +1131,7 @@ sub get_fragments
 
 	foreach my $child (get_children($ov->{'root'}))
 	{
-		push @fragments, $child if ($child->[0] =~ /^fragment@(\d+)$/);
+		push @fragments, $child if ($child->[0] =~ /^fragment[@-](\d+)$/);
 	}
 
 	return @fragments;
@@ -1148,11 +1148,11 @@ sub renumber_fragments
 
 	foreach my $child (get_children($ov->{'root'}))
 	{
-		if ($child->[0] =~ /^fragment@(\d+)$/)
+		if ($child->[0] =~ /^fragment([@-])(\d+)$/)
 		{
-			my $num = $1;
+			my ($sep,$num) = ($1,$2);
 			$remap[$num] = $count + $offset;
-			$child->[0] = sprintf('fragment@%d', $count + $offset);
+			$child->[0] = sprintf('fragment%s%d', $sep, $count + $offset);
 			push @fragments, $child;
 			$count++;
 		}

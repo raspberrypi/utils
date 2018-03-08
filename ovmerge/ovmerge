@@ -1299,7 +1299,7 @@ sub get_labels
 {
 	my ($node) = @_;
 
-	return sort { $a->[0] cmp $b->[0] } (@{$node->[3]}) if ($sort);
+	return sort { $a cmp $b } (@{$node->[3]}) if ($sort);
 	return (@{$node->[3]});
 }
 

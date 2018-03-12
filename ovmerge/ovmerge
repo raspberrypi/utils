@@ -232,7 +232,7 @@ sub dtparse
 
 	my $dt = { 'labels'=>$labels, 'includes'=>[], 'memreserves'=>[] };
 
-	my $next = ${$state->[0]}[$state->[1]];
+	my $next = get_head($state);
 	my $got_header;
 
 	while ($next =~ /^(\/.+\/|#include)$/)
@@ -325,7 +325,7 @@ sub dtparse
 	if ($state->[1] != @{$state->[0]})
 	{
 		# For now
-		printf("* Junk at the end - %s ...\n", ${$state->[0]}[$state->[1]]);
+		printf("* Junk at the end - %s ...\n", get_head($state));
 	}
 
 	return $dt;
@@ -835,7 +835,7 @@ sub read_tokens
 	my ($filename, $depth) = @_;
 	my $linenum = 0;
 	my $fh;
-	my $tokens = [];
+	my $tokens = [ '/file/', $filename ];
 	my $in_comment = 0;
 	my $if_count = 0;
 
@@ -928,10 +928,31 @@ sub read_tokens
 sub match
 {
 	my ($state, $match) = @_;
-	my $next = ${$state->[0]}[$state->[1]];
+	my $next = get_head($state);
 	print("[match '$match' @ $state->[1]]\n") if ($trace);
 	die "* Unexpected token '$next' - expected '$match'\n" if ($next ne $match);
-	return ${$state->[0]}[++$state->[1]];
+	return get_next($state);
+}
+
+sub get_next
+{
+	my ($state) = @_;
+	$state->[1]++;
+	return get_head($state);
+}
+
+sub get_head
+{
+	my ($state) = @_;
+	my $head = ${$state->[0]}[$state->[1]];
+	while ($head eq '/file/')
+	{
+		my $file = get_next($state);
+		$state->[2] = $file;
+		print("[file $file]\n") if ($trace);
+		$head = get_next($state);
+	}
+	return $head;
 }
 
 sub remove_node
@@ -1402,10 +1423,10 @@ sub map_find
 sub get_int
 {
 	my ($state) = @_;
-	my $next = $state->[0]->[$state->[1]];
-	return undef if ($next !~ /^[0-9]/);
-	match($state, $next);
-	return $next;
+	my $head = get_head($state);
+	return undef if ($head !~ /^[0-9]/);
+	get_next($state);
+	return $head;
 }
 
 sub usage

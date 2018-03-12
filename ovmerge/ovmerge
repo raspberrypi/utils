@@ -48,6 +48,7 @@ my %elem_types = (
  '#' => [ 8, 0xffffffffffffffff ], # 64-bit int
 );
 
+my $branch;
 my $comment = 0;
 my $show_includes = 0;
 my $pi_extras = 0;
@@ -63,7 +64,16 @@ while ($ARGV[0] =~ /^-/)
 {
 	my $arg = shift @ARGV;
 
-	if ($arg eq '-c')
+	if ($arg eq '-b')
+	{
+		$branch = shift @ARGV;
+		if (!defined $branch)
+		{
+			print STDERR ("* Branch parameter missing\n");
+			usage();
+		}
+	}
+	elsif ($arg eq '-c')
 	{
 		$comment = 1;
 	}
@@ -84,8 +94,8 @@ while ($ARGV[0] =~ /^-/)
 		my $firstline = <>;
 		if ($firstline !~ /^\/\/ redo: ovmerge (.*)/)
 		{
-		    print STDERR ("* Redo but input has no 'redo:' comment\n");
-		    usage();
+			print STDERR ("* Redo but input has no 'redo:' comment\n");
+			usage();
 		}
 		my $cmdline = $1;
 		@ARGV = split(/\s/, $cmdline);
@@ -831,7 +841,9 @@ sub read_tokens
 
 	print("    " x $depth, $filename, "\n") if ($show_includes);
 	print("[read_tokens '$filename']\n") if ($trace);
-	die "* Failed to open '$filename'\n" if (!open($fh, '<', $filename));
+	die "* Failed to open '$filename'\n" if ($branch
+		? !open($fh, '-|', "git show $branch:./$filename")
+		: !open($fh, '<', $filename));
 
 	while (my $line = <$fh>)
 	{
@@ -1038,6 +1050,7 @@ sub apply_node
 sub search_path
 {
 	my ($fname) = @_;
+	return $fname if ($branch && system("git cat-file -e $branch:./$fname") == 0);
 	return $fname if (-r $fname);
 	return undef;
 }
@@ -1400,10 +1413,11 @@ sub usage
 	print STDERR ("Usage: ovmerge <options> <ovspec>\n");
 	print STDERR ("  where <ovspec> is the name of an overlay, optionally followed by\n");
 	print STDERR ("    a comma-separated list of parameters, each with optional '=<value>'\n");
-	print STDERR ("    assignemts. The presens of any parameters, or a comma followed by\n");
+	print STDERR ("    assignments. The presense of any parameters, or a comma followed by\n");
 	print STDERR ("    no parameters, removes the parameter declarations from merged overlay,\n");
 	print STDERR ("    to avoid a potential name clash.\n");
 	print STDERR ("  and <options> are any of:\n");
+	print STDERR ("	   -b <branch> - read files from specified git branch\n");
 	print STDERR ("	   -c - include 'redo' comment with command line (c.f. '-r')\n");
 	print STDERR ("	   -h - display this help info\n");
 	print STDERR ("	   -i - show include hierarchy for each file\n");

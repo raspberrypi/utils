@@ -416,9 +416,8 @@ sub dtparam
 			{
 				# boolean
 				my ($prop) = ($1);
-				my $bool;
-				$value = boolean_value($value);
-				if ($value)
+				my $bool = boolean_value($value);
+				if ($bool)
 				{
 					set_prop($node, $prop);
 				}
@@ -440,7 +439,7 @@ sub dtparam
 		}
 		else
 		{
-			$value = boolean_value($value);
+			my $bool = boolean_value($value);
 			while ($decl =~ /\G([=!+-])(\d+)/g)
 			{
 				my ($op, $num) = ($1, $2);
@@ -449,17 +448,17 @@ sub dtparam
 				# Enable or disable the fragment as needed
 				if ($op eq '!')
 				{
-					$value = !$value;
+					$bool = !$bool;
 				}
 				elsif ($op eq '+')
 				{
-					$value = 1;
+					$bool = 1;
 				}
 				elsif ($op eq '-')
 				{
-					$value = 0;
+					$bool = 0;
 				}
-				$frag->[2]->[0]->[0] = ($value ? '__overlay__' : '__dormant__');
+				$frag->[2]->[0]->[0] = ($bool ? '__overlay__' : '__dormant__');
 			}
 			die "* Invalid override 3:$param\n" if (pos($decl) != undef);
 		}

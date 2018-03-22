@@ -40,12 +40,12 @@ use strict;
 use integer;
 use POSIX qw(strftime);
 
-my %elem_types = (
- '"' => [ 0 ],                     # string
- '.' => [ 1, 0xff ],               # byte
- ';' => [ 2, 0xffff ],             # 16-bit int
- ':' => [ 4, 0xffffffff ],         # 32-bit int
- '#' => [ 8, 0xffffffffffffffff ], # 64-bit int
+my %elem_sizes = (
+ '"' => 0, # string
+ '.' => 1, # byte
+ ';' => 2, # 16-bit int
+ ':' => 4, # 32-bit int
+ '#' => 8, # 64-bit int
 );
 
 my $branch;
@@ -357,6 +357,32 @@ sub dtdump
 	dump_node($dt->{'root'}, 0);
 }
 
+
+sub get_vector
+{
+	my ($p, $size, $len) = @_;
+	if (($p->[0] eq '<' || $p->[0] eq '[') && ($p->[1] == $size) && (!defined $len || $len == @{$p->[2]}))
+	{
+		return $p->[2];
+	} else {
+		return undef;
+	}
+}
+
+sub get_label_ref
+{
+	my ($p) = @_;
+	my $vector = get_vector($p, 4, 1);
+	if ($vector && ($vector->[0] =~ /^(?:&.*|0)$/))
+	{
+		return $vector->[0];
+	}
+	else
+	{
+		return undef;
+	}
+}
+
 sub dtparam
 {
 	my ($dt, $param, $value) = @_;
@@ -366,25 +392,39 @@ sub dtparam
 	my $ovr = get_prop($overrides, $param);
 	die "* dtparam '$param' not found\n" if (!$ovr);
 
-	for (my $pos = 1; $pos < @$ovr; $pos += 2)
+	for (my $pos = 1; $pos < @$ovr;)
 	{
-		my $p = $ovr->[$pos];
-		die "* Invalid override 1: $param\n" if (($p->[0] ne '<') || ($p->[1] != 4) || ($p->[2]->[0] !~ /^(&.*|0)$/));
-		my $label = $1;
-		$p = $ovr->[$pos+1];
+		my $p = $ovr->[$pos++];
+		my $label = get_label_ref($p);
+		die "* Invalid override 1: $param\n" if (!defined $label);
+		$p = $ovr->[$pos++];
 		die "* Invalid override 2: $param\n" if ($p->[0] ne '"');
 		my $decl = $p->[1];
 		if ($label =~ /^&(.*)/)
 		{
 			my $node = resolve_label($dt, $1);
 			die "* Missing label '$1'\n" if (!$node);
-			if ($decl =~ /^([-a-zA-Z0-9_,]+)([.;:#])(\d+)$/)
+			if ($decl =~ /^([-a-zA-Z0-9_,]+)([.;:#])(\d+)(?:=(.*))?$/)
 			{
 				# Integer parameter
-				my ($prop, $type, $offset) = ($1, $2, $3);
-				my ($size, $mask) = @{$elem_types{$type}};
-				my $intval = integer_value($value) & $mask;
+				my ($prop, $type, $offset, $assign) = ($1, $2, $3, $4);
+				my $size = $elem_sizes{$type};
+				my $val = $value;
+				if (defined $assign)
+				{
+					if ($assign ne '')
+					{
+						$val = $assign;
+					}
+					else
+					{
+						my $vector = get_vector($ovr->[$pos++], 4, 1);
+						die "* Expected cell value in paramter '$param'\n" if (!defined $vector);
+						$val = $vector->[0];
+					}
+				}
 
+				my $intval = integer_value($val, $size);
 				if ($prop eq 'reg')
 				{
 					my $regval = sprintf("%x", $intval);
@@ -398,24 +438,21 @@ sub dtparam
 				if ($chunk)
 				{
 					# Check the override type matches the property type
-					if (($chunk->[0] eq '<' && $chunk->[1] != $size) ||
-						($chunk->[0] eq '[' && $chunk->[1] != $size))
-					{
-						die "* Probably incorrect override property type for '$prop'\n";
-					}
+					my $vector = get_vector($chunk, $size);
+					die "* Probably incorrect override property type for '$prop'\n" if (!$vector);
 
 					# Apply the override
-					for (my $i = @{$chunk->[2]}; $i < $chunk_idx; $i++)
+					for (my $i = @$vector; $i < $chunk_idx; $i++)
 					{
-						$chunk->[2]->[$i] = 0;
+						$vector->[$i] = 0;
 					}
-					$chunk->[2]->[$chunk_idx] = $intval;
+					$vector->[$chunk_idx] = $intval;
 				}
 			}
-			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)\?$/)
+			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)\?(?:=(.*))?$/)
 			{
 				# boolean
-				my ($prop) = ($1);
+				my ($prop, $assign) = ($1, $2);
 				my $bool = boolean_value($value);
 				if ($bool)
 				{
@@ -426,11 +463,11 @@ sub dtparam
 					delete_prop($node, $prop);
 				}
 			}
-			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)$/)
+			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)(?:=(.*))?$/)
 			{
 				# string
-				my ($prop) = ($1);
-				set_prop($node, $prop, ['"', $value]);
+				my ($prop, $assign) = ($1, $2);
+				set_prop($node, $prop, ['"', defined $assign ? $assign : $value]);
 			}
 			else
 			{
@@ -567,17 +604,15 @@ sub ovapply
 		my $target = get_prop($fragment, 'target');
 		if ($target)
 		{
-			die "* Invalid target reference\n"
-			    if (($target->[1]->[0] ne '<') ||
-				($target->[1]->[2]->[0] !~ /^&(.*)/));
+			my $label = get_label_ref($target->[1]);
+			die "* Invalid target reference\n" if ($label !~ /^&(.*)/);
 			$target_node = $base->{'labels'}->{$1};
 			die "* Label '$1' not found in base\n" if (!$target_node);
 		}
 		else
 		{
 			$target = get_prop($fragment, 'target-path');
-			die "* Invalid target-path\n"
-			    if ($target->[1]->[0] ne '"');
+			die "* Invalid target-path\n" if ($target->[1]->[0] ne '"');
 			$target_node = get_node($base, $target->[1]->[1]);
 			die "* Path '$target->[1]->[1]' not found in base\n" if (!$target_node);
 		}
@@ -834,7 +869,7 @@ sub read_tokens
 	my ($filename, $depth) = @_;
 	my $linenum = 0;
 	my $fh;
-	my $tokens = [ '/file/', $filename ];
+	my $tokens = [ ['/file/', $filename] ];
 	my $in_comment = 0;
 	my $if_count = 0;
 
@@ -873,6 +908,7 @@ sub read_tokens
 				die "* Failed to find include file '$incfile'" if (!$dtsfile);
 				my $inc_tokens = read_tokens($dtsfile, $depth + 1);
 				push @$tokens, @$inc_tokens;
+				push @$tokens, ['/file/', $filename];
 			}
 			else
 			{
@@ -944,11 +980,18 @@ sub get_head
 {
 	my ($state) = @_;
 	my $head = ${$state->[0]}[$state->[1]];
-	while ($head eq '/file/')
+	while (ref $head)
 	{
-		my $file = get_next($state);
-		$state->[2] = $file;
-		print("[file $file]\n") if ($trace);
+		if ($head->[0] eq '/file/')
+		{
+			my $file = $head->[1];
+			$state->[2] = $file;
+			print("[file $file]\n") if ($trace);
+		}
+		else
+		{
+			die "* Unknown metadata '$head->[0]'\n";
+		}
 		$head = get_next($state);
 	}
 	return $head;
@@ -1203,8 +1246,7 @@ sub renumber_fragments
 	{
 		for (my $pos = 1; $pos < @$ovr; $pos++)
 		{
-			my $p = $ovr->[$pos];
-			if (($p->[0] eq '<') && ($p->[2]->[0] eq '0'))
+			if (get_label_ref($ovr->[$pos]) eq '0')
 			{
 				$pos++;
 				$ovr->[$pos]->[1] =~ s/\G([=!+-])(\d+)/$1.$remap[$2]/eg;
@@ -1323,6 +1365,12 @@ sub find_prop_chunk
 		$pos = $end;
 	}
 
+	if (!$chunk && $create)
+	{
+		$chunk = [ '<', $size, [] ];
+		push @$prop, $chunk;
+	}
+
 	$offset -= $pos;
 	die "* Unaligned override '$ovrname', property $prop\n" if ($offset % $size);
 	return ($chunk, $offset / $size);
@@ -1338,7 +1386,8 @@ sub get_labels
 
 sub integer_value
 {
-	my ($value) = @_;
+	my ($value, $size) = @_;
+	my %masks = (1=>0xff, 2=>0xffff, 4=>0xffffffff, 8=>0xffffffffffffffff);
 	if ($value =~ /^(y|yes|on|true|down)?$/)
 	{
 		return 1;
@@ -1351,11 +1400,18 @@ sub integer_value
 	{
 		return 2;
 	}
+	elsif ($value =~ /^&/)
+	{
+		die "* Label '$value' used as non-32-bit integer\n" if ($size != 4);
+		return $value;
+	}
 	elsif ($value =~ /^[0-9]/)
 	{
-		return eval($value);
+		my $mask = $masks{$size};
+		die "* Bad size '$size' for integer\n" if (!$mask);
+		return eval($value) & $mask;
 	}
-	die "* Bad boolean value '$value'\n";
+	die "* Bad integer value '$value'\n";
 }
 
 sub boolean_value

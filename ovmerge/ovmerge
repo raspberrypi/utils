@@ -1325,7 +1325,7 @@ sub delete_prop
 	for (my $i = 0; $i < @{$node->[1]}; $i++)
 	{
 		my $prop = $node->[1]->[$i];
-		return splice(@{$node->[1]}, $i) if ($prop->[0] eq $name);
+		return splice(@{$node->[1]}, $i, 1) if ($prop->[0] eq $name);
 	}
 
 	return undef;

@@ -876,6 +876,8 @@ sub read_tokens
 	my $tokens = [ ['/file/', $filename] ];
 	my $in_comment = 0;
 	my $if_count = 0;
+	my $expr;
+	my $expr_level = 0;
 
 	print("    " x $depth, $filename, "\n") if ($show_includes);
 	print("[read_tokens '$filename']\n") if ($trace);
@@ -932,6 +934,23 @@ sub read_tokens
 
 		# Split the line into tokens
 		$line =~ /^\s*/g;
+
+		if ($expr_level)
+		{
+			while ($expr_level && $line =~ /\G(.*?)([\(\)])(\s*)/cg)
+			{
+				$expr_level += ($2 eq '(') ? 1 : -1;
+				$expr .= $1 . $2;
+				$expr .= $3 if ($expr_level);
+			}
+			if ($expr_level)
+			{
+				$expr .= $1 if ($line =~ /\G(.*?)\s*$/cg);
+				next;
+			}
+			push @$tokens, $expr;
+		}
+
 		while ($line =~ /\G((?:\/(?:dts-v1|plugin|memreserve|bits|delete-node|delete-property)\/)|&[a-zA-Z_][a-zA-Z0-9_]*|[a-zA-Z_][a-zA-Z0-9_]*:|[-a-zA-Z0-9,._+#@]+|\(|"(?:[^\\"]|\\.)*"|'(?:[^']|\\.)*'|\/\/|\/\*|[\/{};=<>,\[\]])\s*/cg)
 		{
 			my $tok = $1;
@@ -952,16 +971,19 @@ sub read_tokens
 			}
 			elsif ($tok eq '(')
 			{
-				my $level = 1;
-				my $expr = '(';
-				$DB::single = 1;
-				while ($level && $line =~ /\G(.*?)([\(\)])(\s*)/cg)
+				$expr_level = 1;
+				$expr = '(';
+				while ($expr_level && $line =~ /\G(.*?)([\(\)])(\s*)/cg)
 				{
-					$level += ($2 eq '(') ? 1 : -1;
+					$expr_level += ($2 eq '(') ? 1 : -1;
 					$expr .= $1 . $2;
-					$expr .= $3 if ($level);
+					$expr .= $3 if ($expr_level);
 				}
-				die "* Unfinished expression ($filename:$linenum):$line\n" if ($level);
+				if ($expr_level)
+				{
+					$expr .= $1 if ($line =~ /\G(.*?)\s*$/cg);
+					last;
+				}
 				$tok = $expr;
 			}
 			push @$tokens, $tok;

@@ -35,6 +35,7 @@
 # To Do:
 # * Consider using hashes for properties and node names
 # * &{/path} syntax
+# * Don't combine bootargs within a .dts, only from overlays
 
 use strict;
 use integer;

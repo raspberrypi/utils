@@ -35,7 +35,6 @@
 # To Do:
 # * Consider using hashes for properties and node names
 # * &{/path} syntax
-# * Don't combine bootargs within a .dts, only from overlays
 
 use strict;
 use integer;
@@ -255,6 +254,10 @@ sub dtparse
 			{
 				die "* File missing /dts-v1/ tag\n" if ($type ne '/dts-v1/');
 				$got_header = 1;
+			}
+			elsif ($type eq '/dts-v1/')
+			{
+				print("* Ignoring duplicate /dts-v1/ tag\n") if ($warnings);
 			}
 			elsif ($type eq '/plugin/')
 			{
@@ -962,7 +965,7 @@ sub read_tokens
 			}
 			elsif ($tok eq '/*')
 			{
-				if ($line !~ /\G.*?\*\//cg)
+				if ($line !~ /\G.*?\*\/\s*/cg)
 				{
 					$in_comment = 1;
 					$line = '';
@@ -1134,7 +1137,7 @@ sub apply_node
 	# Properties
 	foreach my $prop (get_props($src))
 	{
-		set_prop($dst, @$prop);
+		apply_prop($dst, @$prop);
 	}
 
 	# Labels
@@ -1341,22 +1344,30 @@ sub set_prop
 	{
 		if ($prop->[0] eq $name)
 		{
-			if ($name eq 'status')
-			{
-				@vals = (['"', boolean_value($vals[0][1]) ? 'okay' : 'disabled']);
-			}
-			elsif ($name eq 'bootargs')
-			{
-				# Concatenate bootargs
-				@vals = (['"', get_prop($node, $name)->[1][1] .
-					 ' ' . $vals[0][1]]);
-			}
 			splice(@$prop, 1, @$prop - 1, @vals);
 			return $prop;
 		}
 	}
 
 	return add_prop($node, $name, @vals);
+}
+
+sub apply_prop
+{
+	my ($node, $name, @vals) = @_;
+
+	if ($name eq 'status')
+	{
+		@vals = (['"', boolean_value($vals[0][1]) ? 'okay' : 'disabled']);
+	}
+	elsif ($name eq 'bootargs')
+	{
+		# Concatenate bootargs
+		@vals = (['"', get_prop($node, $name)->[1][1] . ' ' .
+			 $vals[0][1]]);
+	}
+
+	return set_prop($node, $name, @vals);
 }
 
 sub delete_prop

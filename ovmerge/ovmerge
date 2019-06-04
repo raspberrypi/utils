@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 # Author: Phil Elwell <phil@raspberrypi.org>
-# Copyright (c) 2018, Raspberry Pi (Trading) Ltd.
+# Copyright (c) 2018-2019, Raspberry Pi (Trading) Ltd.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -36,6 +36,37 @@
 # * Consider using hashes for properties and node names
 # * &{/path} syntax
 # * 'blame' mode that prepends filename to each line - good for grep.
+
+# Fundamental types
+# ''  - string
+# '#' - 64-bit
+# ':' - 32-bit integer
+# ';' - 16-bit integer
+# '.' - 8-bit integer (byte)
+# '?' - boolean
+# '!' - inverted boolean
+# '[' - byte array     // Byte array syntax accepts but doesn't require colons between bytes
+#   'prop['            // Interpret value as byte array and assign to prop
+#   'prop[=00:01:02'   // property = literal byte array
+#
+# Operations on a fundamental type:
+#                      // N.B. The type must go before the list so we know how to interpret it.
+#
+# 'reg:0'              // set reg and unit address to value
+#   'reg:0=0'          // set reg and unit address to the supplied literal
+#                      // The reg property is only set if it already exists.
+#
+# 'name'               // Assigning to name property automatically sets the node name
+#                      // The name property is only set if it already exists.
+#
+# '=' - literal assignment (if a string, the literal after the =), if an integer, either the in-band integer or the next cell (useful for phandles.
+#   "prop=foo"         // String literal assignment
+#   "prop:0=0"         // Integer literal assignment
+#   "prop:0=", <&spi>; // Integer cell assignment
+#
+# '{...}' - use the value as the key to an element in the set. The usual type indicators apply.
+#   'prop{a='alpha',b='bravo",c='charlie'}";
+#   'prop:0{0=",<&i2c0>,"1=",<&i2c1>,"3=0x2a}";
 
 use strict;
 use integer;
@@ -138,7 +169,7 @@ foreach my $overlay (@ARGV)
 {
 	$overlay =~ s/^([^,:]+)//;
 	my $ovname = $1;
-	my $dt = dtparse($ovname,  $no_dts);
+	my $dt = dtparse($ovname, $no_dts);
 
 	next if ($show_includes);
 
@@ -149,8 +180,12 @@ foreach my $overlay (@ARGV)
 
 	if ($overlay =~ /^,/)
 	{
+		$cur_dt = $dt;
 		delete_node(get_node($dt, '/__overrides__'));
+		$cur_dt = undef;
 	}
+
+	ovstrip($dt) if ($dt->{'plugin'});
 
 	push @overlays, $dt;
 }
@@ -189,8 +224,8 @@ else
 	{
 		# A real Pi base tree will have a __symbols__ node
 		# Some overlays rely on one being present, so ensure one is
-		get_child($base->{'root'}, '__symbols__') ||
-		    add_node($base->{'root'}, '__symbols__');
+		my $symbols = get_child($base->{'root'}, '__symbols__');
+		$symbols = add_node($base->{'root'}, '__symbols__') if (!$symbols);
 
 		# Count and renumber the fragments in the first overlay
 		renumber_fragments($overlays[1], 0);
@@ -201,6 +236,8 @@ else
 		}
 
 		ovapply($base, $overlays[1]);
+
+		delete_node($symbols) if (is_node_empty($symbols));
 	}
 }
 
@@ -423,6 +460,33 @@ sub get_label_ref
 	}
 }
 
+sub parse_lookup_table
+{
+	my ($table, $ovr, $ppos, $value) = @_;
+	my $val = $value;
+
+	#   'prop{a='alpha',b='bravo",c='charlie'}";
+	#   'prop:0{0=",<&i2c0>,"1=",<&i2c1>,"3=0x2a}";
+
+	while ($table =~ /(?:'([^']*)'|([^=]*))=(?:(?:'([^']*)'?|([^,\}]*))([,\}]))?/cg)
+	{
+		my ($key, $sub, $sep) = ($1 || $2, $3 || $4, $5);
+		if (!defined $sub)
+		{
+			my $p = $ovr->[$$ppos++];
+			$sub = get_vector($p, 4, 1)->[0];
+			$table = $ovr->[$$ppos++];
+			die "* Expected string in lookup table\n" if ($table->[0] ne '"');
+			$table = $table->[1];
+			$sep = $1 if ($table =~ /^(\})/);
+		}
+		$val = $sub if ($key eq $value);
+		last if ($sep eq '}');
+	}
+
+	return $val;
+}
+
 sub dtparam
 {
 	my ($dt, $param, $value) = @_;
@@ -444,17 +508,17 @@ sub dtparam
 		{
 			my $node = resolve_label($dt, $1);
 			die "* Missing label '$1'\n" if (!$node);
-			if ($decl =~ /^([-a-zA-Z0-9_,]+)([.;:#])(\d+)(?:=(.*))?$/)
+			if ($decl =~ /^([-a-zA-Z0-9_,]+)([.;:#])(\d+)(?:(=|\{)(.*))?$/)
 			{
 				# Integer parameter
-				my ($prop, $type, $offset, $assign) = ($1, $2, $3, $4);
+				my ($prop, $type, $offset, $op, $opdata) = ($1, $2, $3, $4, $5);
 				my $size = $elem_sizes{$type};
 				my $val = $value;
-				if (defined $assign)
+				if ($op eq '=')
 				{
-					if ($assign ne '')
+					if ($opdata ne '')
 					{
-						$val = $assign;
+						$val = $opdata;
 					}
 					else
 					{
@@ -462,6 +526,10 @@ sub dtparam
 						die "* Expected cell value in paramter '$param'\n" if (!defined $vector);
 						$val = $vector->[0];
 					}
+				}
+				elsif ($op eq '{')
+				{
+					$val = parse_lookup_table($opdata, $ovr, \$pos, $value);
 				}
 
 				my $intval = integer_value($val, $size);
@@ -489,11 +557,31 @@ sub dtparam
 					$vector->[$chunk_idx] = $intval;
 				}
 			}
-			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)\?(?:=(.*))?$/)
+			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)([\?\!])(?:(=|\{)(.*))?$/)
 			{
 				# boolean
-				my ($prop, $assign) = ($1, $2);
-				my $bool = boolean_value($value);
+				my ($prop, $sense, $op, $opdata) = ($1, $2, $3, $4);
+				my $val = $value;
+				if ($op eq '=')
+				{
+					if ($opdata ne '')
+					{
+						$val = $opdata;
+					}
+					else
+					{
+						my $vector = get_vector($ovr->[$pos++], 4, 1);
+						die "* Expected cell value in parameter '$param'\n" if (!defined $vector);
+						$val = $vector->[0];
+					}
+				}
+				elsif ($op eq '{')
+				{
+					$val = parse_lookup_table($opdata, $ovr, \$pos, $value);
+				}
+
+				my $bool = boolean_value($val);
+				$bool = !$bool if ($sense eq '!');
 				if ($bool)
 				{
 					set_prop($node, $prop);
@@ -503,11 +591,35 @@ sub dtparam
 					delete_prop($node, $prop);
 				}
 			}
-			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)(?:=(.*))?$/)
+			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)\[(?:(=|\{)(.*))?$/)
+			{
+				# byte array
+				my ($prop, $op, $opdata) = ($1, $2, $3);
+				my $val = $value;
+				if ($op eq '=')
+				{
+					$val = $opdata;
+				}
+				elsif ($op eq '{')
+				{
+					$val = parse_lookup_table($opdata, $ovr, \$pos, $value);
+				}
+				set_prop($node, $prop, ['[', 1, byte_array_value($val)]);
+			}
+			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)(?:(=|\{)(.*))?$/)
 			{
 				# string
-				my ($prop, $assign) = ($1, $2);
-				set_prop($node, $prop, ['"', defined $assign ? $assign : $value]);
+				my ($prop, $op, $opdata) = ($1, $2, $3);
+				my $val = $value;
+				if ($op eq '=')
+				{
+					$val = $opdata;
+				}
+				elsif ($op eq '{')
+				{
+					$val = parse_lookup_table($opdata, $ovr, \$pos, $value);
+				}
+				set_prop($node, $prop, ['"', $val]);
 			}
 			else
 			{
@@ -616,6 +728,35 @@ sub ovmerge
 	}
 
 	add_node($base->{'root'}, $base_overrides) if ($base_overrides);
+}
+
+# Remove the unused labels from an overlay
+sub ovstrip
+{
+	my ($dt) = @_;
+	my @unused;
+
+	$cur_dt = $dt;
+	while (my ($key, $value) = each (%{$dt->{'labels'}}))
+	{
+		push @unused, $key if (!$dt->{'refcount'}->{$key});
+	}
+
+	foreach my $label (@unused)
+	{
+		my $node = $dt->{'labels'}->{$label};
+		map_del($dt->{'labels'}, $label);
+		my $node_labels = $node->[3];
+		for (my $i = 0; $i < @$node_labels; $i++)
+		{
+			if ($node_labels->[$i] eq $label)
+			{
+				splice(@$node_labels, $i, 1);
+				last;
+			}
+		}
+	}
+	$cur_dt = undef;
 }
 
 # Apply an overlay to a base tree
@@ -1262,6 +1403,13 @@ sub get_node
 	return $node;
 }
 
+sub is_node_empty
+{
+	my ($node) = @_;
+	return get_children($node) == 0 &&
+		get_props($node) == 0;
+}
+
 sub get_child
 {
 	my ($node, $name) = @_;
@@ -1285,9 +1433,9 @@ sub by_addr
 {
 	my $a_addr = ($a->[0] =~ /@(.*)$/) ? hex($1) : undef;
 	my $b_addr = ($b->[0] =~ /@(.*)$/) ? hex($1) : undef;
-	return $a_addr <=> $b_addr if ($a_addr && $b_addr);
-	return -1 if ($a_addr);
-	return 1 if ($b_addr);
+	return $a_addr <=> $b_addr if (defined($a_addr) && defined($b_addr));
+	return -1 if (defined($a_addr));
+	return 1 if (defined($b_addr));
 	return $a->[0] cmp $b->[0];
 }
 
@@ -1549,6 +1697,13 @@ sub boolean_value
 		die "* Bad boolean value '$value'\n";
 	}
 	return $value != 0;
+}
+
+sub byte_array_value
+{
+	my ($value) = @_;
+	my $arr = [ split(/[: ]/, $value) ];
+	return $arr;
 }
 
 sub set_add

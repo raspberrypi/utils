@@ -298,9 +298,16 @@ sub dtparse
 			if ($next =~ /^&(\w+)$/)
 			{
 				my $subnode = $labels->{$1};
-				die "* Unknown label '$1'\n" if (!defined $subnode);
 				match($state, $next);
-				$next = parse_node($state, $subnode->[4], $subnode->[5], $subnode, @newlabels);
+				if (defined $subnode)
+				{
+					$next = parse_node($state, $subnode->[4], $subnode->[5], $subnode, @newlabels);
+				}
+				else
+				{
+					print STDERR ("* Unknown label '$1'\n");
+					$next = parse_node($state, undef, 0, '/', @newlabels);
+				}
 			}
 			elsif ($next eq '/delete-node/')
 			{
@@ -309,9 +316,15 @@ sub dtparse
 				{
 					my $label = $1;
 					my $subnode = $labels->{$label};
-					die "* Unknown label '$1'\n" if (!defined $subnode);
-					delete_node($subnode);
 					match($state, $next);
+					if (defined $subnode)
+					{
+						delete_node($subnode);
+					}
+					else
+					{
+						print STDERR ("* Unknown label '$1'\n");
+					}
 					$next = match($state, ';');
 				}
 			}
@@ -774,13 +787,16 @@ sub parse_node
 		my $labelled_node = map_find($labels, $newlabel);
 		if ($labelled_node)
 		{
-			die "* Duplicated label '$newlabel'\n" if ($labelled_node != $node);
-			print("* Duplicated label '$newlabel' (on the same node)\n") if ($warnings);
+			if ($labelled_node != $node)
+			{
+				print STDERR ("* Duplicated label '$newlabel'\n");
+			}
+			else
+			{
+				print("* Replicated label '$newlabel' (on the same node)\n") if ($warnings);
+			}
 		}
-		else
-		{
-			add_label($cur_dt, $node, $newlabel);
-		}
+		add_label($cur_dt, $node, $newlabel);
 	}
 
 	match($state, '}');

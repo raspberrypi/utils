@@ -35,6 +35,7 @@
 # To Do:
 # * Consider using hashes for properties and node names
 # * &{/path} syntax
+# * 'blame' mode that prepends filename to each line - good for grep.
 
 use strict;
 use integer;
@@ -58,6 +59,9 @@ my $trace = 0;
 my $warnings = 0;
 my $no_dts = 0;
 my $cur_dt;
+my $retcode = 0;
+my $trace_prop;
+my $trace_label;
 
 my @cmdline;
 
@@ -219,7 +223,7 @@ if ($comment)
 
 dtdump($overlays[0]);
 
-exit(0);
+exit($retcode);
 
 sub dtparse
 {
@@ -227,6 +231,7 @@ sub dtparse
 	#   'root'   => '/' node
 	#   'plugin' => boolean true if /plugin/ tag is present.
 	#   'labels' => hash of labels used in tree
+	#   'refcount' => hash of reference count of labels in tree (excluding the definition)
 	#   'includes' => array of included headers (array to preserve order)
 	#   'memreserves' => array of memreseve [base,length] pairs
 
@@ -235,7 +240,7 @@ sub dtparse
 	my $state = [ read_tokens($filename, 0), 0, undef ];
 	my $labels = {};
 
-	my $dt = { 'labels'=>$labels, 'includes'=>[], 'memreserves'=>[] };
+	my $dt = { 'labels'=>$labels, 'includes'=>[], 'memreserves'=>[], 'refcount'=>{} };
 
 	my $next = get_head($state);
 
@@ -347,6 +352,20 @@ sub dtparse
 	{
 		# For now
 		printf("* Junk at the end - %s ...\n", get_head($state));
+	}
+
+	# Check reference counts
+	while (my ($key, $value) = each (%{$dt->{'refcount'}}))
+	{
+		if ($value < 0)
+		{
+			die "* Internal error - negative refcount on '$key'\n";
+		}
+		elsif ($value > 0 && !defined $dt->{'labels'}->{$key} && !$dt->{'plugin'})
+		{
+			print STDERR ("* symbol '$key' is undefined in '$filename'\n");
+			$retcode = 1;
+		}
 	}
 
 	return $dt;
@@ -717,7 +736,7 @@ sub parse_node
 						push @prop, [ '"', $1 ];
 						$next = match($state, $next);
 					}
-					elsif ($next =~ /&(.*)/)
+					elsif ($next =~ /^&(.*)/)
 					{
 						# noderef string
 						push @prop, [ '&', $1 ];
@@ -1094,13 +1113,19 @@ sub delete_node
 
 	remove_node($node);
 
-	# Delete all labels referring to the node
+	# Delete all labels attached to the node
 	foreach my $label (get_labels($node))
 	{
 		map_del($cur_dt->{'labels'}, $label);
 	}
 
 	print("  [Deleted labels]\n") if ($trace);
+
+	# Delete all label references from the properties
+	foreach my $prop (get_props($node))
+	{
+	    adj_val_refs(-1, @$prop[1..$#$prop]);
+	}
 
 	# Delete all subnodes
 	while (@{$node->[2]})
@@ -1130,10 +1155,25 @@ sub relabel_node
 					{
 						if ($term =~ /^&(.*)/)
 						{
-							my $newlabel = $transform->{$1};
-							$term = '&'.$newlabel if ($newlabel);
+						    my $newlabel = $transform->{$1};
+						    if ($newlabel)
+						    {
+							adj_ref(-1, $1);
+							adj_ref(1, $newlabel);
+							$term = '&'.$newlabel;
+						    }
 						}
 					}
+				}
+				elsif ($chunk->[0] eq '&')
+				{
+				    my $newlabel = $transform->{$chunk->[1]};
+				    if ($newlabel)
+				    {
+					adj_ref(-1, $1);
+					adj_ref(1, $newlabel);
+					$chunk->[1] = $newlabel;
+				    }
 				}
 			}
 		}
@@ -1356,10 +1396,15 @@ sub set_prop
 {
 	my ($node, $name, @vals) = @_;
 
+	$DB::single = 1 if ($name eq $trace_prop);
+
+	adj_val_refs(1, @vals);
+
 	foreach my $prop (@{$node->[1]})
 	{
 		if ($prop->[0] eq $name)
 		{
+			adj_val_refs(-1, @$prop[1..$#$prop]);
 			splice(@$prop, 1, @$prop - 1, @vals);
 			return $prop;
 		}
@@ -1390,10 +1435,16 @@ sub delete_prop
 {
 	my ($node, $name) = @_;
 
+	$DB::single = 1 if ($name eq $trace_prop);
+
 	for (my $i = 0; $i < @{$node->[1]}; $i++)
 	{
 		my $prop = $node->[1]->[$i];
-		return splice(@{$node->[1]}, $i, 1) if ($prop->[0] eq $name);
+		if ($prop->[0] eq $name)
+		{
+			adj_val_refs(-1, @$prop[1..$#$prop]);
+			return splice(@{$node->[1]}, $i, 1) ;
+		}
 	}
 
 	return undef;
@@ -1550,6 +1601,33 @@ sub get_int
 	return undef if ($head !~ /^[0-9]/);
 	get_next($state);
 	return $head;
+}
+
+sub adj_val_refs
+{
+    my ($inc, @vals) = @_;
+    foreach my $val (@vals)
+    {
+	if ($val->[0] eq '&')
+	{
+	    adj_ref($inc, $val->[1]);
+	}
+	elsif ($val->[0] eq '<')
+	{
+	    foreach my $elem (@{$val->[2]})
+	    {
+		adj_ref($inc, $1) if ($elem =~ /^&(.*)/);
+	    }
+	}
+    }
+}
+
+sub adj_ref
+{
+    my ($inc, $label) = @_;
+    $DB::single = 1 if ($inc < 0 && $cur_dt->{'refcount'}->{$label} == 0);
+    $cur_dt->{'refcount'}->{$label} += $inc;
+    printf ("[ ref %s -> %s ]\n", $label, $cur_dt->{'refcount'}->{$label}) if ($label eq $trace_label);
 }
 
 sub usage

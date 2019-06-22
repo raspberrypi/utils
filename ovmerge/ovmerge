@@ -434,14 +434,15 @@ sub dtdump
 	dump_node($dt->{'root'}, 0);
 }
 
-
 sub get_vector
 {
 	my ($p, $size, $len) = @_;
 	if (($p->[0] eq '<' || $p->[0] eq '[') && ($p->[1] == $size) && (!defined $len || $len == @{$p->[2]}))
 	{
 		return $p->[2];
-	} else {
+	}
+	else
+	{
 		return undef;
 	}
 }
@@ -1265,7 +1266,7 @@ sub delete_node
 	# Delete all label references from the properties
 	foreach my $prop (get_props($node))
 	{
-	    adj_val_refs(-1, @$prop[1..$#$prop]);
+		adj_val_refs(-1, @$prop[1..$#$prop]);
 	}
 
 	# Delete all subnodes
@@ -1296,25 +1297,25 @@ sub relabel_node
 					{
 						if ($term =~ /^&(.*)/)
 						{
-						    my $newlabel = $transform->{$1};
-						    if ($newlabel)
-						    {
-							adj_ref(-1, $1);
-							adj_ref(1, $newlabel);
-							$term = '&'.$newlabel;
-						    }
+							my $newlabel = $transform->{$1};
+							if ($newlabel)
+							{
+								adj_ref(-1, $1);
+								adj_ref(1, $newlabel);
+								$term = '&'.$newlabel;
+							}
 						}
 					}
 				}
 				elsif ($chunk->[0] eq '&')
 				{
-				    my $newlabel = $transform->{$chunk->[1]};
-				    if ($newlabel)
-				    {
-					adj_ref(-1, $1);
-					adj_ref(1, $newlabel);
-					$chunk->[1] = $newlabel;
-				    }
+					my $newlabel = $transform->{$chunk->[1]};
+					if ($newlabel)
+					{
+						adj_ref(-1, $1);
+						adj_ref(1, $newlabel);
+						$chunk->[1] = $newlabel;
+					}
 				}
 			}
 		}
@@ -1378,7 +1379,7 @@ sub add_node
 	else
 	{
 		die "* Invalid root node '$name'\n" if ($name ne '/');
-	    	$node->[5] = 0;
+		$node->[5] = 0;
 		$cur_dt->{'root'} = $node;
 	}
 	return $node;
@@ -1760,29 +1761,29 @@ sub get_int
 
 sub adj_val_refs
 {
-    my ($inc, @vals) = @_;
-    foreach my $val (@vals)
-    {
-	if ($val->[0] eq '&')
+	my ($inc, @vals) = @_;
+	foreach my $val (@vals)
 	{
-	    adj_ref($inc, $val->[1]);
+		if ($val->[0] eq '&')
+		{
+			adj_ref($inc, $val->[1]);
+		}
+		elsif ($val->[0] eq '<')
+		{
+			foreach my $elem (@{$val->[2]})
+			{
+				adj_ref($inc, $1) if ($elem =~ /^&(.*)/);
+			}
+		}
 	}
-	elsif ($val->[0] eq '<')
-	{
-	    foreach my $elem (@{$val->[2]})
-	    {
-		adj_ref($inc, $1) if ($elem =~ /^&(.*)/);
-	    }
-	}
-    }
 }
 
 sub adj_ref
 {
-    my ($inc, $label) = @_;
-    $DB::single = 1 if ($inc < 0 && $cur_dt->{'refcount'}->{$label} == 0);
-    $cur_dt->{'refcount'}->{$label} += $inc;
-    printf ("[ ref %s -> %s ]\n", $label, $cur_dt->{'refcount'}->{$label}) if ($label eq $trace_label);
+	my ($inc, $label) = @_;
+	$DB::single = 1 if ($inc < 0 && $cur_dt->{'refcount'}->{$label} == 0);
+	$cur_dt->{'refcount'}->{$label} += $inc;
+	printf ("[ ref %s -> %s ]\n", $label, $cur_dt->{'refcount'}->{$label}) if ($label eq $trace_label);
 }
 
 sub usage

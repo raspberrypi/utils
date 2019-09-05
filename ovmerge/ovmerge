@@ -59,7 +59,8 @@
 # 'name'               // Assigning to name property automatically sets the node name
 #                      // The name property is only set if it already exists.
 #
-# '=' - literal assignment (if a string, the literal after the =), if an integer, either the in-band integer or the next cell (useful for phandles.
+# '=' - literal assignment (if a string, the literal after the =), if an integer,
+#       either the in-band integer or the next cell (useful for phandles).
 #   "prop=foo"         // String literal assignment
 #   "prop:0=0"         // Integer literal assignment
 #   "prop:0=", <&spi>; // Integer cell assignment
@@ -620,7 +621,14 @@ sub dtparam
 				{
 					$val = parse_lookup_table($opdata, $ovr, \$pos, $value);
 				}
-				set_prop($node, $prop, ['"', $val]);
+				if ($prop eq 'name')
+				{
+					$node->[0] = $val;
+				}
+				else
+				{
+					set_prop($node, $prop, ['"', $val]);
+				}
 			}
 			else
 			{

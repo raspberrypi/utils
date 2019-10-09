@@ -33,6 +33,7 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 # To Do:
+# * Extended lookup syntax ("key," => "key=key"), etc.
 # * Consider using hashes for properties and node names
 # * &{/path} syntax
 # * 'blame' mode that prepends filename to each line - good for grep.
@@ -66,7 +67,7 @@
 #   "prop:0=", <&spi>; // Integer cell assignment
 #
 # '{...}' - use the value as the key to an element in the set. The usual type indicators apply.
-#   'prop{a='alpha',b='bravo",c='charlie'}";
+#   'prop{a='alpha',b='bravo',c='charlie'}";
 #   'prop:0{0=",<&i2c0>,"1=",<&i2c1>,"3=0x2a}";
 
 use strict;
@@ -637,13 +638,13 @@ sub dtparam
 		}
 		else
 		{
-			my $bool = boolean_value($value);
 			while ($decl =~ /\G([=!+-])(\d+)/g)
 			{
 				my ($op, $num) = ($1, $2);
 				my $frag = get_node($dt, '/fragment-'.$num) || get_node($dt, '/fragment@'.$num);
 				die "* Param $param: no fragment $num\n" if (!$frag);
 				# Enable or disable the fragment as needed
+				my $bool = boolean_value($value);
 				if ($op eq '!')
 				{
 					$bool = !$bool;

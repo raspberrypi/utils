@@ -466,15 +466,16 @@ sub get_label_ref
 sub parse_lookup_table
 {
 	my ($table, $ovr, $ppos, $value) = @_;
-	my $val = $value;
+	my $val;
 
-	#   'prop{a='alpha',b='bravo",c='charlie'}";
-	#   'prop:0{0=",<&i2c0>,"1=",<&i2c1>,"3=0x2a}";
+	#   "prop{a=alpha,b='bravo !',c,=default}"; # Non-match -> 'default'
+	#   "prop:0{0=",<&i2c0>,"1=",<&i2c1>,"3=0x2a,}"; # Non-match copies
+	#   "not:0{0=1,1=0}"; # Non-match -> error
 
-	while ($table =~ /(?:'([^']*)'|([^=]*))=(?:(?:'([^']*)'?|([^,\}]*))([,\}]))?/cg)
+	while ($table =~ /(?:'([^']*)'|([^=,\}]*))(?:=(?:'([^']*)'|([^,\}]*)))?([,\}])?/cg)
 	{
 		my ($key, $sub, $sep) = ($1 || $2, $3 || $4, $5);
-		if (!defined $sub)
+		if (!defined $sep)
 		{
 			my $p = $ovr->[$$ppos++];
 			$sub = get_vector($p, 4, 1)->[0];
@@ -483,9 +484,21 @@ sub parse_lookup_table
 			$table = $table->[1];
 			$sep = $1 if ($table =~ /^(\})/);
 		}
-		$val = $sub if ($key eq $value);
+		if ($key eq '')
+		{
+			if (!defined $val)
+			{
+				$val = (defined $sub) ? $sub : $value;
+			}
+		}
+		elsif ($key eq $value)
+		{
+			$val = (defined $sub) ? $sub : $key;
+		}
 		last if ($sep eq '}');
 	}
+
+	die "* No match for '$value'\n" if (!defined $val);
 
 	return $val;
 }

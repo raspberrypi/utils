@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 # Author: Phil Elwell <phil@raspberrypi.org>
-# Copyright (c) 2018-2019, Raspberry Pi (Trading) Ltd.
+# Copyright (c) 2018-2020, Raspberry Pi (Trading) Ltd.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -979,7 +979,7 @@ sub parse_node
 		{
 			if ($labelled_node != $node)
 			{
-				print STDERR ("* Duplicated label '$newlabel'\n");
+				print STDERR ("* Duplicated label '$newlabel' - '", $labelled_node->[0], "' and '", $node->[0], "'\n");
 			}
 			else
 			{
@@ -1527,6 +1527,10 @@ sub renumber_fragments
 			if (get_label_ref($ovr->[$pos]) eq '0')
 			{
 				$pos++;
+				while ($ovr->[$pos]->[1] =~ /\G[=!+-](\d+)/g)
+				{
+					die ("* override '$ovr->[0]}' references missing fragment $1\n") if (!defined($remap[$1]));
+				}
 				$ovr->[$pos]->[1] =~ s/\G([=!+-])(\d+)/$1.$remap[$2]/eg;
 			}
 		}

@@ -93,6 +93,7 @@ my $warnings = 0;
 my $no_dts = 0;
 my $cur_dt;
 my $retcode = 0;
+my $query = 0;
 my $trace_prop;
 my $trace_label;
 
@@ -153,6 +154,10 @@ while ($ARGV[0] =~ /^-/)
 	elsif ($arg eq '-w')
 	{
 		$warnings = 1;
+	}
+	elsif ($arg eq '-q')
+	{
+		$query = 1;
 	}
 	else
 	{
@@ -260,7 +265,7 @@ if ($comment)
 	print("\n\n");
 }
 
-dtdump($overlays[0]);
+dtdump($overlays[0]) if (!$query);
 
 exit($retcode);
 

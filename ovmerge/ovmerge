@@ -181,7 +181,7 @@ foreach my $overlay (@ARGV)
 
 	while ($overlay =~ /\G[,:]([^=,]+)(?:=([^,]+))?/g)
 	{
-		dtparam($dt, $1, $2);
+		dtparam($dt, $1, $2 || '');
 	}
 
 	if ($overlay =~ /^,/)
@@ -411,6 +411,13 @@ sub dtparse
 		}
 	}
 
+	# Check the overrides
+	my $overrides = get_node($dt, '/__overrides__');
+	foreach my $param (@{$overrides->[1]})
+	{
+		dtparam($dt, $param->[0], undef);
+	}
+
 	return $dt;
 }
 
@@ -495,21 +502,24 @@ sub parse_lookup_table
 				$sep = $1 if ($table =~ /^(\})/);
 			}
 		}
-		if ($key eq '')
+		if (defined $value)
 		{
-			if (!defined $val)
+			if ($key eq '')
 			{
-				$val = (defined $sub) ? $sub : $value;
+				if (!defined $val)
+				{
+					$val = (defined $sub) ? $sub : $value;
+				}
 			}
-		}
-		elsif ($key eq $value)
-		{
-			$val = (defined $sub) ? $sub : $key;
+			elsif ($key eq $value)
+			{
+				$val = (defined $sub) ? $sub : $key;
+			}
 		}
 		last if ($sep eq '}');
 	}
 
-	die "* No match for '$value'\n" if (!defined $val);
+	die "* No match for '$value'\n" if (defined $value && !defined $val);
 
 	return $val;
 }
@@ -534,7 +544,7 @@ sub dtparam
 		if ($label =~ /^&(.*)/)
 		{
 			my $node = resolve_label($dt, $1);
-			die "* Missing label '$1'\n" if (!$node);
+			die "* Override '$param' targets unknown label '$1'\n" if (!$node);
 			if ($decl =~ /^([-a-zA-Z0-9_,]+)([.;:#])(\d+)(?:(=|\{)(.*))?$/)
 			{
 				# Integer parameter
@@ -560,7 +570,7 @@ sub dtparam
 				}
 
 				my $intval = integer_value($val, $size);
-				if ($prop eq 'reg')
+				if (defined $value && $prop eq 'reg')
 				{
 					my $regval = sprintf("%x", $intval);
 					$node->[0] =~ s/@[0-9a-fA-F]*$/\@$regval/;
@@ -576,12 +586,15 @@ sub dtparam
 					my $vector = get_vector($chunk, $size);
 					die "* Probably incorrect override property type for '$prop'\n" if (!$vector);
 
-					# Apply the override
-					for (my $i = @$vector; $i < $chunk_idx; $i++)
+					if (defined $value)
 					{
-						$vector->[$i] = 0;
+						# Apply the override
+						for (my $i = @$vector; $i < $chunk_idx; $i++)
+						{
+							$vector->[$i] = 0;
+						}
+						$vector->[$chunk_idx] = $intval;
 					}
-					$vector->[$chunk_idx] = $intval;
 				}
 			}
 			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)([\?\!])(?:(=|\{)(.*))?$/)
@@ -607,15 +620,18 @@ sub dtparam
 					$val = parse_lookup_table($opdata, $ovr, \$pos, $value);
 				}
 
-				my $bool = boolean_value($val);
-				$bool = !$bool if ($sense eq '!');
-				if ($bool)
+				if (defined $value)
 				{
-					set_prop($node, $prop);
-				}
-				else
-				{
-					delete_prop($node, $prop);
+					my $bool = boolean_value($val);
+					$bool = !$bool if ($sense eq '!');
+					if ($bool)
+					{
+						set_prop($node, $prop);
+					}
+					else
+					{
+						delete_prop($node, $prop);
+					}
 				}
 			}
 			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)\[(?:(=|\{)(.*))?$/)
@@ -631,7 +647,10 @@ sub dtparam
 				{
 					$val = parse_lookup_table($opdata, $ovr, \$pos, $value);
 				}
-				set_prop($node, $prop, ['[', 1, byte_array_value($val)]);
+				if (defined $value)
+				{
+					set_prop($node, $prop, ['[', 1, byte_array_value($val)]);
+				}
 			}
 			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)(?:(=|\{)(.*))?$/)
 			{
@@ -646,13 +665,16 @@ sub dtparam
 				{
 					$val = parse_lookup_table($opdata, $ovr, \$pos, $value);
 				}
-				if ($prop eq 'name')
+				if (defined $value)
 				{
-					$node->[0] = $val;
-				}
-				else
-				{
-					set_prop($node, $prop, ['"', $val]);
+					if ($prop eq 'name')
+					{
+						$node->[0] = $val;
+					}
+					else
+					{
+						set_prop($node, $prop, ['"', $val]);
+					}
 				}
 			}
 			else
@@ -667,21 +689,24 @@ sub dtparam
 				my ($op, $num) = ($1, $2);
 				my $frag = get_node($dt, '/fragment-'.$num) || get_node($dt, '/fragment@'.$num);
 				die "* Param $param: no fragment $num\n" if (!$frag);
-				# Enable or disable the fragment as needed
-				my $bool = boolean_value($value);
-				if ($op eq '!')
+				if (defined $value)
 				{
-					$bool = !$bool;
+					# Enable or disable the fragment as needed
+					my $bool = boolean_value($value);
+					if ($op eq '!')
+					{
+						$bool = !$bool;
+					}
+					elsif ($op eq '+')
+					{
+						$bool = 1;
+					}
+					elsif ($op eq '-')
+					{
+						$bool = 0;
+					}
+					$frag->[2]->[0]->[0] = ($bool ? '__overlay__' : '__dormant__');
 				}
-				elsif ($op eq '+')
-				{
-					$bool = 1;
-				}
-				elsif ($op eq '-')
-				{
-					$bool = 0;
-				}
-				$frag->[2]->[0]->[0] = ($bool ? '__overlay__' : '__dormant__');
 			}
 			die "* Invalid override 3:$param\n" if (pos($decl) != undef);
 		}
@@ -1489,9 +1514,9 @@ sub by_addr
 {
 	my $a_addr = ($a->[0] =~ /@(.*)$/) ? hex($1) : undef;
 	my $b_addr = ($b->[0] =~ /@(.*)$/) ? hex($1) : undef;
-	return $a_addr <=> $b_addr if (defined($a_addr) && defined($b_addr));
-	return -1 if (defined($a_addr));
-	return 1 if (defined($b_addr));
+	return $a_addr <=> $b_addr if (defined $a_addr && defined $b_addr);
+	return -1 if (defined $a_addr);
+	return 1 if (defined $b_addr);
 	return $a->[0] cmp $b->[0];
 }
 
@@ -1555,7 +1580,7 @@ sub renumber_fragments
 				$pos++;
 				while ($ovr->[$pos]->[1] =~ /\G[=!+-](\d+)/g)
 				{
-					die ("* override '$ovr->[0]}' references missing fragment $1\n") if (!defined($remap[$1]));
+					die ("* override '$ovr->[0]}' references missing fragment $1\n") if (!defined $remap[$1]);
 				}
 				$ovr->[$pos]->[1] =~ s/\G([=!+-])(\d+)/$1.$remap[$2]/eg;
 			}
@@ -1715,6 +1740,7 @@ sub integer_value
 {
 	my ($value, $size) = @_;
 	my %masks = (1=>0xff, 2=>0xffff, 4=>0xffffffff, 8=>0xffffffffffffffff);
+	return undef if (!defined $value);
 	if ($value =~ /^(y|yes|on|true|down)?$/)
 	{
 		return 1;

@@ -33,7 +33,6 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 # To Do:
-# * Extended lookup syntax ("key," => "key=key"), etc.
 # * Consider using hashes for properties and node names
 # * &{/path} syntax
 # * 'blame' mode that prepends filename to each line - good for grep.
@@ -810,8 +809,30 @@ sub ovapply
 
 	my $base_overrides = get_node($base, '/__overrides__');
 
-	# Apply each fragment
+	# Apply fragments in two passes
 
+	# Pass 1: Apply fragments that target other fragments within the overlay
+	foreach my $fragment (get_fragments($ov))
+	{
+		my $overlay = get_child($fragment, '__overlay__');
+		next if (!$overlay);
+		my $target_node;
+		my $target = get_prop($fragment, 'target');
+		if ($target)
+		{
+			my $label = get_label_ref($target->[1]);
+			die "* Invalid target reference\n" if ($label !~ /^&(.*)/);
+			$target_node = $ov->{'labels'}->{$1};
+			if ($target_node)
+			{
+			    # Merge properties and subnodes
+			    apply_node($base, $target_node, $overlay);
+			    $overlay->[0] = '__dormant__';
+			}
+		}
+	}
+
+	# Pass 2: Apply fragments that target the base dtb
 	foreach my $fragment (get_fragments($ov))
 	{
 		my $overlay = get_child($fragment, '__overlay__');

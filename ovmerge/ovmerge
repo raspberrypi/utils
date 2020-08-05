@@ -33,6 +33,7 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 # To Do:
+# * Combine duplicate labels on the same node
 # * Consider using hashes for properties and node names
 # * &{/path} syntax
 # * 'blame' mode that prepends filename to each line - good for grep.
@@ -649,7 +650,7 @@ sub dtparam
 				}
 				if (defined $value)
 				{
-					set_prop($node, $prop, ['[', 1, byte_array_value($val)]);
+					apply_prop($node, $prop, ['[', 1, byte_array_value($val)]);
 				}
 			}
 			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)(?:(=|\{)(.*))?$/)
@@ -673,7 +674,7 @@ sub dtparam
 					}
 					else
 					{
-						set_prop($node, $prop, ['"', $val]);
+						apply_prop($node, $prop, ['"', $val]);
 					}
 				}
 			}

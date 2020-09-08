@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Author: Phil Elwell <phil@raspberrypi.org>
+# Author: Phil Elwell <phil@raspberrypi.com>
 # Copyright (c) 2018-2020, Raspberry Pi (Trading) Ltd.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -281,7 +281,7 @@ sub dtparse
 
 	my ($filename, $got_header) = @_;
 
-	my $state = [ read_tokens($filename, 0), 0, undef ];
+	my $state = [ read_tokens($filename, 0, {}), 0, undef ];
 	my $labels = {};
 
 	my $dt = { 'labels'=>$labels, 'includes'=>[], 'memreserves'=>[], 'refcount'=>{} };
@@ -1132,12 +1132,13 @@ sub dump_node
 
 sub read_tokens
 {
-	my ($filename, $depth) = @_;
+	my ($filename, $depth, $defines) = @_;
 	my $linenum = 0;
 	my $fh;
 	my $tokens = [ ['/file/', $filename] ];
 	my $in_comment = 0;
 	my $if_count = 0;
+	my $hidden_count = 0;
 	my $expr;
 	my $expr_level = 0;
 
@@ -1157,13 +1158,38 @@ sub read_tokens
 			$in_comment = 0 ;
 		}
 
-		if ($if_count)
+		if ($line =~ /^\s*#if(def|ndef)?\s+(\w+)/)
 		{
-			$if_count-- if ($line =~ /^#endif/);
+			my $mode = $1;
+			my $defined = $defines->{$2};
+			$if_count++;
+			$hidden_count++ if ($hidden_count || !$mode ||
+					($mode eq 'def' && !$defined) ||
+					($mode eq 'ndef' && $defined));
+			next;
+		}
+		elsif ($line =~ /^\s*#else/)
+		{
+			if ($hidden_count == 0)
+			{
+				$hidden_count = 1;
+			}
+			elsif ($hidden_count == 1)
+			{
+				$hidden_count = 0;
+			}
+			next;
+		}
+		elsif ($line =~ /^\s*#endif/)
+		{
+			die "* Unmatched #endif ($filename:$linenum)\n" if (!$if_count);
+			$if_count--;
+			$hidden_count-- if ($hidden_count);
 			next;
 		}
 
-		if ($line =~ /^(?:#include|\/include\/)\s+(["<][^">]+[">])\s*$/)
+		next if ($hidden_count);
+		if ($line =~ /^\s*(?:#include|\/include\/)\s+(["<][^">]+[">])\s*$/)
 		{
 			my $incfile = $1;
 			if ($incfile =~ /\.h.$/)
@@ -1174,7 +1200,7 @@ sub read_tokens
 			{
 				my $dtsfile = search_path(substr($incfile, 1, -1));
 				die "* Failed to find include file '$incfile'" if (!$dtsfile);
-				my $inc_tokens = read_tokens($dtsfile, $depth + 1);
+				my $inc_tokens = read_tokens($dtsfile, $depth + 1, $defines);
 				push @$tokens, @$inc_tokens;
 				push @$tokens, ['/file/', $filename];
 			}
@@ -1184,12 +1210,22 @@ sub read_tokens
 			}
 			next;
 		}
-		elsif ($line =~ /^#if(def)?\s/)
+		elsif ($line =~ /^\s*#define\s+(\w+)/)
 		{
-			$if_count++;
+			$defines->{$1} = 1;
 			next;
 		}
-		elsif ($line =~ /^#/)
+		elsif ($line =~ /^\s*#undef\s+(\w+)/)
+		{
+			delete $defines->{$1};
+			next;
+		}
+		elsif ($line =~ /^\s*#bkpt/)
+		{
+			$DB::single = 1;
+			next;
+		}
+		elsif ($line =~ /^\s*#/)
 		{
 			die "* Unrecognised directive ($filename:$linenum):\n$line\n";
 		}

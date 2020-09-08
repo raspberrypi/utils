@@ -84,6 +84,7 @@ my %elem_sizes = (
 
 my $branch;
 my $comment = 0;
+my $expand = 0;
 my $show_includes = 0;
 my $pi_extras = 0;
 my $redo = 0;
@@ -115,6 +116,10 @@ while ($ARGV[0] =~ /^-/)
 	elsif ($arg eq '-c')
 	{
 		$comment = 1;
+	}
+	elsif ($arg eq '-e')
+	{
+		$expand = 1;
 	}
 	elsif ($arg eq '-h')
 	{
@@ -178,7 +183,7 @@ foreach my $overlay (@ARGV)
 	my $ovname = $1;
 	my $dt = dtparse($ovname, $no_dts);
 
-	next if ($show_includes);
+	next if ($show_includes || $expand);
 
 	while ($overlay =~ /\G[,:]([^=,]+)(?:=([^,]+))?/g)
 	{
@@ -1144,6 +1149,7 @@ sub read_tokens
 
 	print("    " x $depth, $filename, "\n") if ($show_includes);
 	print("[read_tokens '$filename']\n") if ($trace);
+	print("#### Start of '$filename'\n") if ($expand);
 	die "* Failed to open '$filename'\n" if ($branch
 		? !open($fh, '-|', "git show $branch:./$filename")
 		: !open($fh, '<', $filename));
@@ -1203,6 +1209,7 @@ sub read_tokens
 				my $inc_tokens = read_tokens($dtsfile, $depth + 1, $defines);
 				push @$tokens, @$inc_tokens;
 				push @$tokens, ['/file/', $filename];
+				print("#### Continue '$filename'\n") if ($expand);
 			}
 			else
 			{
@@ -1225,10 +1232,8 @@ sub read_tokens
 			$DB::single = 1;
 			next;
 		}
-		elsif ($line =~ /^\s*#/)
-		{
-			die "* Unrecognised directive ($filename:$linenum):\n$line\n";
-		}
+
+		print($line) if ($expand);
 
 		# Split the line into tokens
 		$line =~ /^\s*/g;
@@ -1294,6 +1299,8 @@ sub read_tokens
 	}
 
 	close($fh);
+
+	print("#### End of '$filename'\n") if ($expand);
 
 	return $tokens;
 }

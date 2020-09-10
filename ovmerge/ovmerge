@@ -1926,6 +1926,7 @@ sub usage
 	print STDERR ("  and <options> are any of:\n");
 	print STDERR ("    -b <branch>  Read files from specified git branch\n");
 	print STDERR ("    -c      Include 'redo' comment with command line (c.f. '-r')\n");
+	print STDERR ("    -e      Expand mode - list non-skipped lines in order of inclusion\n");
 	print STDERR ("    -h      Display this help info\n");
 	print STDERR ("    -i      Show include hierarchy for each file\n");
 	print STDERR ("    -n      No .dts file header (just parsing .dtsi files)\n");

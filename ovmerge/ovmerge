@@ -200,6 +200,10 @@ foreach my $overlay (@ARGV)
 	{
 		$cur_dt = $dt;
 		delete_node(get_node($dt, '/__overrides__'));
+		foreach my $fragment (get_fragments($dt))
+		{
+			delete_node($fragment) if (get_child($fragment, '__dormant__'));
+		}
 		$cur_dt = undef;
 	}
 
@@ -807,7 +811,7 @@ sub ovmerge
 	add_node($base->{'root'}, $base_overrides) if ($base_overrides);
 }
 
-# Remove the unused labels from an overlay
+# Remove the dormant fragments and unused labels from an overlay
 sub ovstrip
 {
 	my ($dt) = @_;

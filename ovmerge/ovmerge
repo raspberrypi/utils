@@ -236,6 +236,12 @@ else
 		$i2c = resolve_label($base, $i2c->[1]);
 		add_label($base, $i2c, 'i2c');
 		add_label($base, $i2c, 'i2c_arm');
+
+		$i2c = get_prop($aliases, 'i2c0')->[1];
+		set_prop($aliases, 'i2c_vc', $i2c);
+
+		$i2c = resolve_label($base, $i2c->[1]);
+		add_label($base, $i2c, 'i2c_vc');
 	}
 
 	if (@overlays > 1)

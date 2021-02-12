@@ -873,7 +873,7 @@ sub ovapply
 			if ($target_node)
 			{
 			    # Merge properties and subnodes
-			    apply_node($base, $target_node, $overlay);
+			    apply_node($ov, $target_node, $overlay);
 			    $overlay->[0] = '__dormant__';
 			}
 		}

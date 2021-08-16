@@ -1162,6 +1162,9 @@ sub read_tokens
 	my $hidden_count = 0;
 	my $expr;
 	my $expr_level = 0;
+	my $filepath = $filename;
+	$filepath =~ s/\/?[^\/]*$//;
+	$filepath .= '/' if ($filepath);
 
 	print("    " x $depth, $filename, "\n") if ($show_includes);
 	print("[read_tokens '$filename']\n") if ($trace);
@@ -1220,7 +1223,7 @@ sub read_tokens
 			}
 			elsif ($incfile =~ /\.dtsi?.$/)
 			{
-				my $dtsfile = search_path(substr($incfile, 1, -1));
+				my $dtsfile = search_path($filepath.substr($incfile, 1, -1));
 				die "* Failed to find include file '$incfile'" if (!$dtsfile);
 				my $inc_tokens = read_tokens($dtsfile, $depth + 1, $defines);
 				push @$tokens, @$inc_tokens;

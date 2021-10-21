@@ -99,6 +99,7 @@ my $query = 0;
 my $trace_prop;
 my $trace_label;
 
+my @redo_comments;
 my @cmdline;
 
 while ($ARGV[0] =~ /^-/)
@@ -153,6 +154,12 @@ while ($ARGV[0] =~ /^-/)
 		}
 		my $cmdline = $1;
 		@ARGV = split(/\s/, $cmdline);
+		while (my $line = <>)
+		{
+			chomp($line);
+			last if ($line =~ /^\/dts-v1\//);
+			push @redo_comments, $line;
+		}
 	}
 	elsif ($arg eq '-s')
 	{
@@ -283,7 +290,12 @@ if ($comment)
 			print(" $opt");
 		}
 	}
-	print("\n\n");
+	print("\n");
+	if (@redo_comments)
+	{
+		print(join("\n", @redo_comments));
+	}
+	print("\n");
 }
 
 dtdump($overlays[0]) if (!$query);

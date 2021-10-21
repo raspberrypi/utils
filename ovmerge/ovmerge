@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 # Author: Phil Elwell <phil@raspberrypi.com>
-# Copyright (c) 2018-2020, Raspberry Pi (Trading) Ltd.
+# Copyright (c) 2018-2021, Raspberry Pi (Trading) Ltd.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -1930,6 +1930,8 @@ sub adj_val_refs
 sub adj_ref
 {
 	my ($inc, $label) = @_;
+
+	return if (!$cur_dt);
 	$DB::single = 1 if ($inc < 0 && $cur_dt->{'refcount'}->{$label} == 0);
 	$cur_dt->{'refcount'}->{$label} += $inc;
 	printf ("[ ref %s -> %s ]\n", $label, $cur_dt->{'refcount'}->{$label}) if ($label eq $trace_label);

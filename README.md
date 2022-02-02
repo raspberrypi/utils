@@ -5,4 +5,5 @@ A collection of scripts and simple applications
     for easy comparison, displaying the include tree, etc.
 * raspinfo - A short script to dump information about the Pi. Intended for
     the submission of bug reports.
+* otpset - A short script to help with reading and setting the customer OTP bits.
     

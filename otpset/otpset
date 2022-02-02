@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (c) 2022 Raspberry Pi Ltd.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
+import argparse
+import subprocess
+import sys
+
+
+customer_otp_offset = 36
+legacy_offset = 8
+
+def ParseCommandLine():
+    parser = argparse.ArgumentParser(description='A helper application for reading and setting Raspberry Pi OTP (One Time Programmable) bits.\n Take care when using this application, changes to OTP are irreversible.', epilog="Script provided by Raspberry Pi Ltd under a BSD-3-Clause license")
+    parser.add_argument("data", nargs="*", type=str, help="Customer OTP data to set. 1 to 8 32 bit values. Can be decimal, hex (0x...), or binary (0b...)")
+
+    parser.add_argument("-r", "--row", type=int, help="Customer OTP start row. Valid values are 0 to 7", default=-1, choices=range(0,8), metavar="0-7")
+    
+    parser.add_argument("-c", "--customer", action='store_true', help="Read customer OTP bits")
+    parser.add_argument("-p", "--pi", action='store_true', help="Read Raspberry Pi OTP bits")
+    parser.add_argument("-v", "--verbose", action='store_true', help="Extra detailed messages")
+    parser.add_argument("--yes", action='store_true', help="Make changes to OTP (without this a dry run is done). WARNING: Changes to OTP are irreversible")
+    parser.add_argument("--lock", action='store_true', help="Permanently disable writing to customer OTP. WARNING: This operation is irreversible")
+
+    parser.add_argument("-f", "--fake", action='store_true', help="Use fake data for testing")
+
+    return parser.parse_args()
+
+def ReadOTP(args):
+
+    # Map key is actually the value from the docs, so we do need to subtract/add the legacy_offset from it where necessary. 
+    row_info = {
+    17: "Bootmode register",
+    18: "Bootmode register copy",
+    28: "Serial number",
+    29: "One's compliment of serial number",
+    30: "Revision code",
+    33: "Extended board revision",
+    36: "Customer OTP Row 0",
+    37: "Customer OTP Row 1",
+    38: "Customer OTP Row 2",
+    39: "Customer OTP Row 3",
+    40: "Customer OTP Row 4",
+    41: "Customer OTP Row 5",
+    42: "Customer OTP Row 6",
+    43: "Customer OTP Row 7",
+    46: "MPEG2 decode key",
+    47: "WVC1 decode key",
+    64: "MAC address",
+    65: "MAC address",
+    66: "Advanced boot mode",
+    }
+
+    if args.fake: 
+        result = b'08:00000000\n09:00000000\n10:00000000\n11:00000000\n12:00000000\n13:00000000\n14:00000000\n15:00000000\n16:00280000\n17:000008b0\n18:000008b0\n19:ffffffff\n20:ffffffff\n21:ffffffff\n22:ffffffff\n23:ffffffff\n24:ffffffff\n25:ffffffff\n26:ffffffff\n27:00005d5d\n28:58d2eb5c\n29:a72d14a3\n30:00c03111\n31:00000000\n32:00000000\n33:00000000\n34:00000000\n35:00000000\n36:00000000\n37:00000000\n38:00000000\n39:00000000\n40:00000000\n41:00000000\n42:00000000\n43:00000000\n44:00000000\n45:00000000\n46:00000000\n47:00000000\n48:00000000\n49:00000000\n50:00000000\n51:00000000\n52:00000000\n53:00000000\n54:00000000\n55:00000000\n56:00000000\n57:00000000\n58:00000000\n59:00000000\n60:00000000\n61:00000000\n62:00000000\n63:00000000\n64:00650000\n65:00000000\n66:00000000\n'
+    else:
+        result = subprocess.check_output(['vcgencmd', 'otp_dump'])
+
+    result = result.split(b"\n")
+
+    result.pop() # don't need the last entry, it's fluff
+
+    for i, val in enumerate(result):
+        result[i] = int(val[3:], base=16)
+
+        if args.customer:
+            if i >= customer_otp_offset - legacy_offset and i < 44 - legacy_offset:
+                print(i - (customer_otp_offset - legacy_offset), "0x{:08x} b'{:032b}".format(result[i], result[i]))
+        else :
+            print(i + legacy_offset, "0x{:08x} b'{:032b}  {}".format(result[i], result[i], row_info.get(i + legacy_offset, "")))
+    
+
+def WriteOTP(args):
+
+# At this stage we know the args.rows are valid as argparser sorted that out, and we have an number of position parameters in args.data which contain the 32 bit values to write
+# We also have the flag to say defo do this, rather than dry run in args.yes
+
+# Format of the mailbox call is 
+# vcmailbox <command> [8 + number * 4] [8 + number * 4] [start_num] [number] [value] [value] [value] ...
+# write command is 0x00038021
+
+    write_cmd = 0x00038021
+
+    num_rows = len(args.data)
+    first_row = 0 if args.row == -1 else args.row
+
+    if (num_rows < 1 or num_rows > 8 - first_row):
+        print("Invalid combination of start row ({}) and number of words to write to OTP ({})". format(first_row, num_rows))
+        sys.exit(-1)
+
+    num_bytes = (num_rows * 4) + 8
+  
+    cmd = ['vcmailbox', hex(write_cmd), str(num_bytes), str(num_bytes), str(first_row), str(num_rows) ]
+
+    for i, val in enumerate(args.data):
+        cmd.append(hex(int(val, 0)))
+
+    if args.verbose :
+        print('Setting {} rows of customer OTP from row {} onwards'.format(num_rows, first_row))
+        print('Sending VC mailbox call: ',' '.join(cmd))
+    
+    if args.yes:
+        print("Are you ABSOLUTELY sure you want to make changes to the customer OTP?. This operation is IRREVERSIBLE. Type YES to confirm")
+        confirm = input()
+
+        if confirm == 'YES':
+            result = subprocess.check_output(cmd)
+
+def LockOTP(args):
+
+    cmd = ['vcmailbox', '0x00038021', '8', '8', '0xffffffff', '0xaffe0000' ]
+
+    if args.verbose :
+        print('Sending VC mailbox call to lock OTP: ',' '.join(cmd))
+
+    print("Are you ABSOLUTELY sure you want to permamently disable changes to the customer OTP?. This operation is IRREVERSIBLE. Type YES to confirm")
+    confirm = input()
+
+    if confirm == 'YES':
+        result = subprocess.check_output(cmd)
+
+
+
+###################################################################################
+# main execution starteth here
+
+args = ParseCommandLine()
+
+if args.customer or args.pi :
+    ReadOTP(args)
+    sys.exit(0)
+
+if args.lock :
+    LockOTP(args)
+    sys.exit(0)
+
+WriteOTP(args)
+

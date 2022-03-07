@@ -200,7 +200,7 @@ foreach my $overlay (@ARGV)
 
 	while ($overlay =~ /\G[,:]([^=,]+)(?:=([^,]+))?/g)
 	{
-		dtparam($dt, $1, $2 || '');
+		dtparam($dt, $1, defined($2) ? $2 : '');
 	}
 
 	if ($overlay =~ /^,/)
@@ -519,7 +519,7 @@ sub parse_lookup_table
 
 	while ($table =~ /(?:'([^']*)'|([^=,\}]*))(?:=(?:'([^']*)'|([^,\}]*)))?([,\}])?/cg)
 	{
-		my ($key, $sub, $sep) = ($1 || $2, $3 || $4, $5);
+		my ($key, $sub, $sep) = (defined($1) ? $1 : $2, defined($3) ? $3 : $4, $5);
 		if (!defined $sep)
 		{
 			my $p = $ovr->[$$ppos++];

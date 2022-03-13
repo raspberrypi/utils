@@ -612,7 +612,7 @@ sub dtparam
 
 				# Locate the offset within the property
 				my ($chunk, $chunk_idx) =
-					find_prop_chunk($node, $prop, $offset, $size, $param, $prop ne 'reg');
+					find_prop_chunk($node, $prop, $offset, $size, $param, defined($value) && $prop ne 'reg');
 
 				if ($chunk)
 				{

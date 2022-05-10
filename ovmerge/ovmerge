@@ -973,6 +973,7 @@ sub parse_node
 		if ($next =~ /^[-a-zA-Z0-9,._+#@]+$/)
 		{
 			my $name = $next;
+			print("* Leading zero in node name '$name'\n") if ($name =~ /\@0[0-9a-fA-F]/);
 			$next = match($state, $next);
 			if ($next eq '{')
 			{

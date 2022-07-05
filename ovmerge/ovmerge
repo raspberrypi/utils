@@ -1547,7 +1547,7 @@ sub get_node
 	my ($dt, $path) = @_;
 
 	my $node = $dt->{'root'};
-	if ($path =~ s/^([^\/]+)\//\//)
+	if ($path =~ s/^([^\/]+)(\/|$)/\//)
 	{
 		$node = resolve_alias($dt, $1);
 	}

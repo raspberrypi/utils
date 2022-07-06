@@ -484,7 +484,7 @@ sub dtdump
 sub get_vector
 {
 	my ($p, $size, $len) = @_;
-	if (($p->[0] eq '<' || $p->[0] eq '[') && ($p->[1] == $size) && (!defined $len || $len == @{$p->[2]}))
+	if (($p->[0] eq '<' || $p->[0] eq '[') && (($p->[1] == $size) || ($p->[1] == 4 && $size == 8)) && (!defined $len || $len == @{$p->[2]}))
 	{
 		return $p->[2];
 	}

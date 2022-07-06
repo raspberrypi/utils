@@ -1866,6 +1866,11 @@ sub byte_array_value
 {
 	my ($value) = @_;
 	my $arr = [ split(/[: ]/, $value) ];
+	foreach my $val (@$arr)
+	{
+		die "* invalid bytestring at '$val'\n"
+		    if ($val !~ /^([0-9a-f][0-9a-f])*$/i);
+	}
 	return $arr;
 }
 
@@ -1877,7 +1882,6 @@ sub set_add
 	{
 		return if ((ref $val && $set->[$i] == $val) ||
 			   ($set->[$i] eq $val));
-
 	}
 	push @$set, $val;
 }

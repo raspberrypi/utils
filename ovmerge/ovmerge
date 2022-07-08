@@ -203,16 +203,27 @@ foreach my $overlay (@ARGV)
 		dtparam($dt, $1, defined($2) ? $2 : '');
 	}
 
+	my $exports = get_node($dt, '/__exports__');
+	$cur_dt = $dt;
+	if ($exports)
+	{
+		foreach my $symbol (@{$exports->[1]})
+		{
+			# Only the name is required
+			my $expname = $symbol->[0];
+			# Increment the reference count of the named label
+			adj_ref(1, $expname);
+		}
+	}
 	if ($overlay =~ /^,/)
 	{
-		$cur_dt = $dt;
 		delete_node(get_node($dt, '/__overrides__'));
 		foreach my $fragment (get_fragments($dt))
 		{
 			delete_node($fragment) if (get_child($fragment, '__dormant__'));
 		}
-		$cur_dt = undef;
 	}
+	$cur_dt = undef;
 
 	ovstrip($dt) if ($dt->{'plugin'});
 

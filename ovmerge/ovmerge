@@ -1515,7 +1515,15 @@ sub apply_node
 	# Sub-nodes
 	foreach my $subsrc (get_children($src))
 	{
-		my $subdst = get_child($dst, $subsrc->[0]) || add_node($dst, $subsrc->[0]);
+		my $subdst = get_child($dst, $subsrc->[0]);
+		if ($subdst)
+		{
+			die "* Subnode $subsrc->[0] already exists\n";
+		}
+		else
+		{
+			$subdst = add_node($dst, $subsrc->[0]);
+		}
 		apply_node($base, $subdst, $subsrc);
 	}
 }

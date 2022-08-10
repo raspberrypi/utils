@@ -322,13 +322,15 @@ sub dtparse
 	#   'refcount' => hash of reference count of labels in tree (excluding the definition)
 	#   'includes' => array of included headers (array to preserve order)
 	#   'memreserves' => array of memreseve [base,length] pairs
+	#   'defines' => array of memreseve [base,length] pairs
 
 	my ($filename, $got_header) = @_;
 
-	my $state = [ read_tokens($filename, 0, {}), 0, undef ];
+	my $defines = {};
+	my $state = [ read_tokens($filename, 0, $defines), 0, undef ];
 	my $labels = {};
 
-	my $dt = { 'labels'=>$labels, 'includes'=>[], 'memreserves'=>[], 'refcount'=>{} };
+	my $dt = { 'labels'=>$labels, 'includes'=>[], 'memreserves'=>[], 'refcount'=>{}, 'defines'=>$defines };
 
 	my $next = get_head($state);
 
@@ -1210,7 +1212,7 @@ sub read_tokens
 		if ($line =~ /^\s*#if(def|ndef)?\s+(\w+)/)
 		{
 			my $mode = $1;
-			my $defined = $defines->{$2};
+			my $defined = defined($defines->{$2});
 			$if_count++;
 			$hidden_count++ if ($hidden_count || !$mode ||
 					($mode eq 'def' && !$defined) ||
@@ -1260,9 +1262,15 @@ sub read_tokens
 			}
 			next;
 		}
-		elsif ($line =~ /^\s*#define\s+(\w+)/)
+		elsif ($line =~ /^\s*#define\s+(\w+)(?:\s+([^\r\n]+))?/)
 		{
-			$defines->{$1} = 1;
+			my $symbol = $1;
+			my $val = $2;
+
+			$val =~ s/\/\/.*//;
+			$val =~ s/\s+$//;
+			$val = '' if (!defined($val));
+			$defines->{$symbol} = $val;
 			next;
 		}
 		elsif ($line =~ /^\s*#undef\s+(\w+)/)
@@ -1332,6 +1340,16 @@ sub read_tokens
 					last;
 				}
 				$tok = $expr;
+			}
+			if ($tok =~ /\b(\w+)\b/)
+			{
+				my $sym = $1;
+				my $newsym = $defines->{$sym};
+				if (defined($newsym))
+				{
+					printf("['%s' -> '%s']\n", $sym, $newsym) if ($trace);
+					$tok =~ s/\b$sym\b/$newsym/;
+				}
 			}
 			push @$tokens, $tok;
 		}

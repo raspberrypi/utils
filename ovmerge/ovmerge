@@ -198,6 +198,38 @@ foreach my $overlay (@ARGV)
 
 	next if ($show_includes || $expand);
 
+	my $model = get_prop_string($dt->{'root'}, 'model');
+
+	if ($model && $model =~ /^Raspberry Pi/ && $pi_extras)
+	{
+		# Pi firmware adds some labels and aliases that overlays
+		# also require.
+		my $aliases = get_child($dt->{'root'}, 'aliases');
+		my $i2c = get_prop($aliases, 'i2c1')->[1];
+		set_prop($aliases, 'i2c', $i2c);
+		set_prop($aliases, 'i2c_arm', $i2c);
+
+		$i2c = resolve_label($dt, $i2c->[1]);
+		add_label($dt, $i2c, 'i2c');
+		add_label($dt, $i2c, 'i2c_arm');
+
+		$i2c = get_prop($aliases, 'i2c0')->[1];
+		set_prop($aliases, 'i2c_vc', $i2c);
+
+		$i2c = resolve_label($dt, $i2c->[1]);
+		add_label($dt, $i2c, 'i2c_vc');
+
+		my $overrides = get_child($dt->{'root'}, '__overrides__');
+		$i2c = get_prop($overrides, 'i2c1');
+		my @prop = @$i2c[1..$#$i2c];
+		set_prop($overrides, 'i2c', @prop);
+		set_prop($overrides, 'i2c_arm', @prop);
+
+		$i2c = get_prop($overrides, 'i2c0');
+		@prop = @$i2c[1..$#$i2c];
+		set_prop($overrides, 'i2c_vc', @prop);
+	}
+
 	while ($overlay =~ /\G[,:]([^=,]+)(?:=([^,]+))?/g)
 	{
 		dtparam($dt, $1, defined($2) ? $2 : '');
@@ -245,26 +277,6 @@ if ($overlays[0]->{'plugin'})
 else
 {
 	my $base = $overlays[0];
-
-	if ($pi_extras)
-	{
-		# Pi firmware adds some labels and aliases that overlays
-		# also require.
-		my $aliases = get_child($base->{'root'}, 'aliases');
-		my $i2c = get_prop($aliases, 'i2c1')->[1];
-		set_prop($aliases, 'i2c', $i2c);
-		set_prop($aliases, 'i2c_arm', $i2c);
-
-		$i2c = resolve_label($base, $i2c->[1]);
-		add_label($base, $i2c, 'i2c');
-		add_label($base, $i2c, 'i2c_arm');
-
-		$i2c = get_prop($aliases, 'i2c0')->[1];
-		set_prop($aliases, 'i2c_vc', $i2c);
-
-		$i2c = resolve_label($base, $i2c->[1]);
-		add_label($base, $i2c, 'i2c_vc');
-	}
 
 	if (@overlays > 1)
 	{
@@ -1709,6 +1721,17 @@ sub node_path
 	my $parent_path = node_path($node->[4]);
 	$parent_path = '' if ($parent_path eq "/");
 	return $parent_path.'/'.$node->[0];
+}
+
+sub get_prop_string
+{
+	my ($node, $name) = @_;
+
+	my $prop = get_prop($node, $name);
+	return undef if (!$prop);
+	return undef if (@$prop != 2);
+	return undef if ($prop->[1]->[0] ne '"');
+	return $prop->[1]->[1];
 }
 
 sub get_prop

@@ -114,6 +114,7 @@ while ($ARGV[0] =~ /^-/)
 			print STDERR ("* Branch parameter missing\n");
 			usage();
 		}
+		push @cmdline, $arg, $branch;
 	}
 	elsif ($arg eq '-c')
 	{
@@ -143,6 +144,7 @@ while ($ARGV[0] =~ /^-/)
 	elsif ($arg eq '-p')
 	{
 		$pi_extras = 1;
+		push @cmdline, $arg;
 	}
 	elsif ($arg eq '-r')
 	{
@@ -164,6 +166,7 @@ while ($ARGV[0] =~ /^-/)
 	elsif ($arg eq '-s')
 	{
 		$sort = 1;
+		push @cmdline, $arg;
 	}
 	elsif ($arg eq '-t')
 	{

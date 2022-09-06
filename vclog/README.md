@@ -1,0 +1,33 @@
+
+# vclog
+
+Tool to fetch VideoCore logs ( assert or msg ) and display them on 
+the terminal. 
+The addresses where logs can be found are fetched from the
+device tree and then using headers found inside that region of memory, 
+the code accesses the log type of interest and parses it.
+
+**Usage**
+
+* sudo ./vclog [-f] <-m|-a>
+* sudo ./vclog [--follow] <--msg|--assert>
+
+**Notes**
+
+* STRUCTS describing how VC arranges it's data within the regions of 
+	interest must keep the same size values. 
+	Since the VC might have a different memory model from the host (32-bit 
+	vs 64-bit) structs values need to be of the same size. 
+
+* Memcpy load pair on aarch64 requires the src address to be aligned with 
+	8 bit boundaries but also at (src + size of memory to copy).
+	Memcpy was used so that we could capture the current state of the logs
+	for parsing, as logs are written to a circular buffer. 
+
+* Logs are written to a circular buffer - so VideoCore keeps track of:
+	
+  A)Oldest message (first message user wants to read) which gets wiped if
+	circular buffer wraps around back to start
+	
+  B)Next region in circular buffer where VideoCore will write it's next 
+	message

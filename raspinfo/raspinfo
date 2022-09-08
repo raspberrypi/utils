@@ -16,7 +16,7 @@ echo "System Information"
 echo "------------------"
 echo
 
-cat /sys/firmware/devicetree/base/model
+printf "%s\n" "$(tr -d '\0' < /proc/device-tree/model)"
 echo
 
 cat /etc/os-release | head -4

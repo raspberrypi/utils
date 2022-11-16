@@ -1910,6 +1910,16 @@ sub integer_value
 		die "* Bad size '$size' for integer\n" if (!$mask);
 		return eval($value) & $mask;
 	}
+	elsif ($value =~ /^[A-Z][A-Z0-9_]+$/)
+	{
+		# Assume it's a valid define, e.g. from a dt-bindings file
+		return $value;
+	}
+	elsif ($value =~ /^\(.+\)$/)
+	{
+		# Assume it's a valid expression
+		return $value;
+	}
 	die "* Bad integer value '$value'\n";
 }
 

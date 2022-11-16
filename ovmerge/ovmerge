@@ -1112,6 +1112,12 @@ sub add_label
 {
 	my ($dt, $node, $label) = @_;
 
+	my $old_value = map_find($dt->{'labels'}, $label);
+	if (defined $old_value)
+	{
+	    return if ($old_value == $node);
+	    die "* Label '$label' redefined\n";
+	}
 	map_add($dt->{'labels'}, $label, $node);
 	push @{$node->[3]}, $label;
 	print("* Multiple labels on '" . node_path($node) . "'\n") if ($warnings && @{$node->[3]} > 1);

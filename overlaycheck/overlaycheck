@@ -1,0 +1,699 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use File::Temp qw/ tempdir /;
+
+my $DTMERGE = "dtmerge";
+my $TMPDIR = tempdir( CLEANUP => 1);
+my $MERGED_DTB = "$TMPDIR/merged.dtb";
+
+my @base_files = (
+    "bcm2711-rpi-4-b",
+    "bcm2711-rpi-400",
+    "bcm2711-rpi-cm4",
+    "bcm2711-rpi-cm4s",
+    "bcm2708-rpi-b",
+    "bcm2708-rpi-b-rev1",
+    "bcm2708-rpi-b-plus",
+    "bcm2708-rpi-zero",
+    "bcm2708-rpi-zero-w",
+    "bcm2708-rpi-cm",
+    "bcm2709-rpi-2-b",
+    "bcm2710-rpi-2-b",
+    "bcm2710-rpi-3-b",
+    "bcm2710-rpi-3-b-plus",
+    "bcm2710-rpi-cm3",
+    "bcm2710-rpi-zero-2",
+);
+
+$ENV{'LD_LIBRARY_PATH'} = "$ENV{'HOME'}/lib";
+
+my %overlay_checkers = (
+    # With the current overlays, the exclusions are no longer necessary, but an
+    # example for i2c-sensor would be:
+    #   '^(addr|lm75addr|int_pin|i2c\d|i2c_csi_dsi|no_timeout)$'
+    'i2c-rtc' => [ \&container_checker, undef ],
+    'i2c-fan' => [ \&container_checker, undef ],
+    "i2c-sensor" => [ \&container_checker, undef ],
+    );
+
+my $word_pattern = '[0-9a-zA-Z0-9][-_a-zA-Z0-9]*';
+my $readme_param_pattern = '([-_a-zA-Z0-9]|<[a-z]>|<[a-z]-[a-z]>)*';
+
+my $verbose;
+my $strict_dtc;
+my $fail = 0;
+
+while (@ARGV && $ARGV[0] =~ /^-/)
+{
+    my $arg = shift @ARGV;
+    if ($arg eq '-v')
+    {
+	$verbose = 1;
+    }
+    elsif ($arg eq '-s')
+    {
+	$strict_dtc = 1;
+    }
+    else
+    {
+	error("Unknown option '$arg'");
+    }
+}
+
+# Aims:
+# * Check that each overlay has an entry in the README
+# * Check that the parameters of each overlay are in the README
+# * Check that the parameters of the base DTBs are in the README
+# * Check that each overlay has an entry in the Makefile
+
+# Process:
+# 1) Parse the base dts's and overlays
+# 2) Parse the README
+# 3) Compare the two
+# 4) Parse the Makefile, and compare with the others
+
+my $kerndir = `git rev-parse --show-toplevel 2>/dev/null`;
+chomp($kerndir);
+error("This isn't a Linux repository") if (!-d "$kerndir/kernel");
+
+chdir($kerndir."/arch/arm/boot/dts");
+
+my @cpp_cmd = ('arm-linux-gnueabihf-cpp',
+	       '-nostdinc',
+	       '-I.',
+	       "-I$kerndir/include",
+	       '-Ioverlays',
+	       '-undef',
+	       '-D__DTS__',
+	       '-x',
+	       'assembler-with-cpp');
+
+my $DTC = "$kerndir/scripts/dtc/dtc";
+my $exclusions_file = $0 . "_exclusions.txt";
+my @warnings_to_suppress = ('unit_address_vs_reg',
+			    'simple_bus_reg',
+			    'unit_address_format',
+			    'interrupts_property',
+			    'gpios_property',
+			    'label_is_string',
+			    'unique_unit_address',
+			    'avoid_unnecessary_addr_size');
+push @warnings_to_suppress, ('pci_device_reg',
+			     'pci_device_bus_num',
+			     'reg_format',
+			     'interrupt_provider',
+			     'dma_ranges_format',
+			     'avoid_default_addr_size') if (!$strict_dtc);
+
+my @dtc_opts;
+
+foreach my $warn (@warnings_to_suppress)
+{
+    push @dtc_opts, '-W', "no-$warn"
+	if (system("$DTC -W no-$warn -v >/dev/null 2>&1") == 0);
+}
+
+my $dtc_opts = join(' ', @dtc_opts);
+
+my ($ignore_missing, $ignore_vestigial) = parse_exclusions($exclusions_file);
+
+# Parse the README
+
+my $readme = parse_readme("overlays/README");
+
+# Parse the base dts's and overlays
+
+my $source = parse_source_files();
+
+# Parse the exclusions
+
+# Compare the two
+
+my ($left_only, $common, $right_only) =
+    compare_sets([keys(%$source)], [keys(%$readme)]);
+
+($left_only) = compare_sets($left_only, [keys(%$ignore_missing)]);
+($right_only) = compare_sets($right_only, [keys(%$ignore_vestigial)]);
+
+list_print("Overlays without documentation", $left_only);
+list_print("Vestigial overlay documentation", $right_only);
+
+$fail ||= (@$left_only || @$right_only);
+
+foreach my $overlay (@$common)
+{
+    my ($l, $b, $r) = compare_sets($source->{$overlay}, $readme->{$overlay});
+    my $rpos = 0;
+    while ($rpos < @$r)
+    {
+	my $rv = $r->[$rpos];
+        if (($rv =~ s/<[i-z]>/[0-9a-fA-F]+/g) ||
+            ($rv =~ s/<[a-h]>/[a-z]/g))
+	{
+	    my $lpos = 0;
+	    my $found = 0;
+	    while ($lpos < @$l)
+	    {
+		if ($l->[$lpos] =~ /^$rv$/)
+		{
+		    splice(@$l, $lpos, 1);
+		    $found = 1;
+		}
+		else
+		{
+		    $lpos++;
+		}
+
+	    }
+	    splice(@$r, $rpos, 1) if ($found);
+	    $rpos++ if (!$found);
+	}
+	else
+	{
+	    $rpos++;
+	}
+    }
+
+    ($l) = compare_sets($l, $ignore_missing->{$overlay});
+    ($r) = compare_sets($r, $ignore_vestigial->{$overlay});
+    list_print("$overlay undocumented parameters", $l);
+    list_print("$overlay vestigial parameter documentation", $r);
+}
+
+# Parse the Makefile
+
+my $makefile = parse_makefile("overlays/Makefile");
+
+($left_only, $common, $right_only) =
+    compare_sets([keys(%$source)], $makefile);
+
+list_print("Overlays missing from the Makefile", $left_only);
+list_print("Vestigial overlay Makefile entries", $right_only);
+
+$fail ||= (@$left_only || @$right_only);
+
+# Now some build/runtime checks
+
+foreach my $base (@base_files)
+{
+    next if (!-f "$base.dts");
+    dtc_cpp("$base.dts", "$TMPDIR/$base.dtb");
+}
+
+chdir($kerndir."/arch/arm/boot/dts/overlays");
+
+dtc_cpp("overlay_map.dts", "$TMPDIR/overlay_map.dtb") if (-r "overlay_map.dts");
+
+foreach my $overlay (sort(keys(%$source)))
+{
+    next if ($overlay =~ /^</);
+    if (system("ovmerge -q ${overlay}-overlay.dts") >> 8)
+    {
+	error("  Error ^ in overlay $overlay\n");
+    }
+    dtc_cpp("${overlay}-overlay.dts", "$TMPDIR/$overlay.dtbo");
+}
+
+foreach my $overlay (sort(keys(%$source)))
+{
+    next if ($overlay =~ /^</);
+    my $overlay_props = $source->{$overlay}[0];
+    foreach my $base (@base_files)
+    {
+	next if (!-f "$base.dts");
+	next if (($overlay =~ /(wifi|bt)/) && ($base !~ /^(bcm2708-rpi-zero-w|bcm2709-rpi-zero-2|bcm2710-rpi-3-|bcm2711-rpi-4-)/));
+
+	next if ($overlay_props->{'bcm2711'} && $base !~ /^bcm2711/);
+	next if (system("$DTMERGE $TMPDIR/$base.dtb $MERGED_DTB $TMPDIR/$overlay.dtbo >/dev/null 2>&1") == ((-2 & 0xff) << 8));
+	error("Failed to merge $overlay with $base") if (system($DTMERGE, $verbose ? ('-d') : (), "$TMPDIR/$base.dtb", $MERGED_DTB, "$TMPDIR/$overlay.dtbo") != 0);
+    }
+    my $checker = $overlay_checkers{$overlay};
+    ($checker->[0])->($overlay, $checker->[1], $source->{$overlay}) if ($checker);
+}
+
+rmdir($TMPDIR);
+
+printf("%s\n", $fail ? "Failed" : "OK");
+exit($fail);
+
+sub compare_sets
+{
+    my ($l, $r) = @_;
+    my (@lonly, @both, @ronly);
+
+    my @l = ($l ? sort(not_ref(@$l)) : ());
+    my @r = ($r ? sort(not_ref(@$r)) : ());
+    my $lidx = 0;
+    my $ridx = 0;
+
+    while (($lidx < @l) && ($ridx < @r))
+    {
+	my $l = $l[$lidx];
+	my $r = $r[$ridx];
+	my $cmp = $l cmp $r;
+	if ($cmp == -1)
+	{
+	    push @lonly, $l;
+	    $lidx++;
+	}
+	elsif ($cmp == 1)
+	{
+	    push @ronly, $r;
+	    $ridx++;
+	}
+	else
+	{
+	    push @both, $l;
+	    $lidx++;
+	    $ridx++;
+	}
+    }
+
+    push @lonly, @l[$lidx..$#l];
+    push @ronly, @r[$ridx..$#r];
+
+    return (\@lonly, \@both, \@ronly);
+}
+
+sub not_ref
+{
+    my @res;
+    foreach my $i (@_)
+    {
+	push @res, $i if (!ref $i);
+    }
+    return @res;
+}
+
+sub list_print
+{
+    my ($label, $list) = @_;
+    if (@$list)
+    {
+	print ("$label:\n");
+	foreach my $x (@$list)
+	{
+	    print ("  $x\n");
+	}
+    }
+}
+
+sub parse_source_files
+{
+    my $overlays = {};
+
+    my %params;
+
+    foreach my $file (glob("bcm2708*.dts bcm2709*.dts bcm2710*.dts bcm2711*.dts"))
+    {
+	foreach my $param (get_params($file))
+	{
+	    next if (ref $param);
+	    $params{$param} = 1;
+	}
+    }
+
+    $overlays->{'<The base DTB>'} = [ sort(keys(%params)) ];
+
+    foreach my $file (glob("overlays/*-overlay.dts"))
+    {
+	my $overlay = ($file =~ /^overlays\/(.*)-overlay.dts$/)[0];
+
+	my $redo_cmd = `grep '// redo: ' $file`;
+	if ($redo_cmd =~ /\/\/ redo: ([^\r\n]+)/)
+	{
+		system("cp $file overlaycheck.dts");
+		system("cd overlays; ovmerge -r ../overlaycheck.dts > $overlay-overlay.dts");
+		system("rm overlaycheck.dts");
+		if (system("git diff --quiet $file") >> 8)
+		{
+			print("* '$overlay' overlay changed after redo\n");
+		}
+	}
+
+	$overlays->{ $overlay } = [ get_params($file) ];
+    }
+
+    return $overlays;
+}
+
+sub parse_readme
+{
+    my ($file) = @_;
+    my $overlays = {};
+    my $fh;
+
+    error("Failed to open '$file'") if (!open($fh, '<', $file));
+
+    my $overlay;
+    my $last_overlay = '';
+    my $params;
+    my $has_params;
+    my $in_params;
+    my $blank_count;
+    my $linenum = 0;
+    my $descr_column = 32;
+
+    while (my $line = <$fh>)
+    {
+	$linenum++;
+	chomp($line);
+	error("TABs in README ($linenum)") if ($line =~ /\t/);
+	error("Trailing whitespace in README ($linenum)") if ($line =~ /\s$/);
+	error("Line too long in README ($linenum)")
+	    if (length($line) > 80 && $line !~ /^\s+[^\s]+$/);
+
+	if ($overlay && !$line)
+	{
+	    $blank_count++;
+	    if ($blank_count == 2)
+	    {
+		error("Missing params for overlay $overlay ($linenum)") if (!$params);
+		$overlays->{ $overlay } = [ sort(@$params) ];
+		$overlay = undef;
+		$params = undef;
+		$in_params = 0;
+	    }
+	    next;
+	}
+
+	$blank_count = 0;
+
+	if (($line =~ /^\w+:\s/) && ($line !~ /^(Name|Info|Load|Params):/))
+	{
+	    error("Bad label ($linenum)");
+	}
+
+	if ($line =~ /^Name:(\s*)(.*)\s*$/)
+	{
+	    error("Bad formatting in README ($linenum)") if ($1 ne '   ');
+	    error("Missing blank lines after overlay? ($linenum)") if ($params);
+	    $overlay = $2;
+	    $params = undef;
+	    $in_params = 0;
+	    if ($overlay !~ /^$word_pattern$/ && $overlay ne '<The base DTB>')
+	    {
+		error("Illegal overlay name '$overlay' in README ($linenum)");
+	    }
+
+	    error("Overlay '$overlay' - order violation in README ($linenum)")
+		if (($overlay cmp $last_overlay) != 1);
+	    $last_overlay = ($overlay ne '<The base DTB>') ? $overlay : ' ';
+	}
+	elsif ($line =~ /^Info:(\s*)(.*)\s*$/)
+	{
+	    error("Bad formatting in README ($linenum)") if ($1 ne '   ');
+	    error("Info label with no Name? ($linenum)") if (!$overlay);
+	}
+	elsif ($line =~ /^Load:(\s*)(.*)\s*$/)
+	{
+	    error("Bad formatting in README ($linenum)") if ($1 ne '   ');
+	    error("Load label with no Name? ($linenum)") if (!$overlay);
+	    my $cmd = $2;
+	    $has_params = 0;
+	    if ($overlay ne '<The base DTB>')
+	    {
+		if ($cmd eq '<Deprecated>')
+		{
+		    # Ignore this overlay
+		    $ignore_missing->{$overlay} = 1;
+		    $ignore_vestigial->{$overlay} = 1;
+		    $overlay = undef;
+		}
+		else
+		{
+		    if ($cmd !~ /^dtoverlay=($word_pattern)(,<param>(?:=<val>|\[=<val>\])?)?$/)
+		    {
+			error("Invalid Load example ($linenum)");
+		    }
+		    error("Wrong overlay name in Load example ($linenum)") if ($1 ne $overlay);
+		    $has_params = 1 if ($2);
+		}
+	    }
+	}
+	elsif (defined($overlay) && ($line =~ /^Params:(.*)$/))
+	{
+	    $blank_count = 0;
+	    my $rol = $1;
+	    $params = [];
+	    $in_params = 1;
+
+	    if ($rol)
+	    {
+		if ($rol eq ' <None>')
+		{
+		    error("Parameter presence mismatch ($linenum)") if ($has_params);
+		    next;
+		}
+		error("Bad formatting in README ($linenum)")
+		    if ($rol !~ /^ ([^ ]+)( *)/);
+		error("Parameter presence mismatch ($linenum)") if (!$has_params);
+		my ($param, $indent2) = ($1, length($2));
+		if ($param !~ /^$readme_param_pattern$/)
+		{
+		    error("Invalid parameter name '$param' in README ($linenum)");
+		}
+		my $descr_indent = 8 + length($param) + $indent2;
+		if (($descr_indent != $descr_column) && ($indent2 != 0))
+		{
+		    error("Bad formatting in README ($linenum)");
+		}
+		push @$params, $param;
+	    }
+	}
+	elsif ($in_params && ($line =~ /^( +)([^ ]+)( *)/))
+	{
+	    my ($indent, $param, $indent2) = (length($1), $2, length($3));
+	    if ($indent == 8)
+	    {
+		my $descr_indent = 8 + length($2) + $indent2;
+		# Try to spot a comment
+		if ((($indent2 == 1) || ($indent2 == 0 && $param =~ /:$/)) &&
+		    ($descr_indent < $descr_column))
+		{
+		    $in_params = 0;
+		    next;
+		}
+		if ($param !~ /^$readme_param_pattern$/)
+		{
+		    error("Invalid parameter name '$param' in README ($linenum)");
+		}
+		if (($descr_indent != $descr_column) && ($indent2 != 0))
+		{
+		    error("Bad formatting in README ($linenum)");
+		}
+		push @$params, $param;
+	    }
+	    else
+	    {
+		error("Bad formatting in README ($linenum)")
+		    if (($indent < 8) ||
+			(($indent > 8) && ($indent < $descr_column)));
+	    }
+	}
+    }
+
+    return $overlays;
+}
+
+sub parse_makefile
+{
+    my ($file) = @_;
+    my $overlays = [];
+    my $fh;
+
+    error("Failed to open '$file'") if (!open($fh, '<', $file));
+
+    push @$overlays, '<The base DTB>';
+
+    my $last_overlay = '';
+    my $linenum = 0;
+    my $in_multiline = 0;
+    while (my $line = <$fh>)
+    {
+	$linenum++;
+	chomp($line);
+	error("Trailing whitespace in Makefile ($linenum)") if ($line =~ /\s$/);
+	my $overlay;
+
+	if ($in_multiline)
+	{
+	    if ($line =~ /^\t(.+)\.dtbo( \\)?$/)
+	    {
+		$overlay = $1;
+		$in_multiline = 0 if (!$2);
+	    }
+	    else
+	    {
+		error("Syntax error in Makefile ($linenum)");
+	    }
+	}
+	elsif ($line =~ /^dtbo-\$\(RPI_DT_OVERLAYS\) \+= (.+)\.dtbo$/)
+	{
+	    $overlay = $1;
+	}
+	elsif ($line =~ /^dtbo-\$\(CONFIG_ARCH_BCM2835\) \+= \\$/)
+	{
+	    $in_multiline = 1;
+	}
+
+	if ($overlay)
+	{
+	    error("Overlay '$overlay' - order violation in Makefile ($linenum)")
+		if (($overlay cmp $last_overlay) != 1);
+	    push @$overlays, $overlay;
+	    $last_overlay = $overlay;
+	}
+    }
+
+    return $overlays;
+}
+
+sub parse_exclusions
+{
+    my ($file) = @_;
+
+    my $missing = {};
+    my $vestigial = {};
+    my $fh;
+
+    error("Failed to open '$file'") if (!open($fh, '<', $file));
+
+    my $overlay;
+    my $linenum = 0;
+    while (my $line = <$fh>)
+    {
+	$linenum++;
+	chomp($line);
+
+	if ($line =~ /^=\s*(.+)$/)
+	{
+	    $overlay = $1;
+	    $missing->{$overlay} = [];
+	    $vestigial->{$overlay} = [];
+	}
+	elsif ($line =~ /^-\s*(.+)$/)
+	{
+	    push @{$missing->{$overlay}}, $1;
+	}
+	elsif ($line =~ /^\+\s*(.+)$/)
+	{
+	    push @{$vestigial->{$overlay}}, $1;
+	}
+    }
+    return ($missing, $vestigial);
+}
+
+sub get_params
+{
+    my ($file) = @_;
+    my @params;
+    my $props = {};
+
+    print ("[ get_params $file ]\n") if ($verbose);
+
+    # Run the file through DTS to expand and clean up
+    my $cpp_cmd = join(" ", @cpp_cmd);
+    my @lines = `$cpp_cmd $file | $DTC $dtc_opts  -i overlays -@ -I dts -O dts`;
+
+    my $is_overlay = ($file =~ /-overlay\.dts$/);
+    for (my $i = 0; $i < @lines; $i++)
+    {
+	my $line = $lines[$i];
+	if ($line =~ /^\s*(__overrides__ \{|target-path\s*=\s*"\/__overrides__"\s*;)\s*$/)
+	{
+	    # Support parameters pushed into the base DTB
+	    if (0 && $1 =~ /^target-path/)
+	    {
+		while ($lines[++$i] !~ /^\s*__overlay__\s*{\s*$/) { }
+	    }
+	    while ($lines[++$i] =~ /^\s*([^ \}]+)(?: = |;)/)
+	    {
+		my $param = $1;
+		my $linenum = $i + 1;
+		error("Invalid parameter name '$param' in '$file'") if ($param !~ /^$word_pattern$/);
+		push @params, $param;
+		if ($lines[$i] =~ /(deadbeef|de ad be ef)/) {
+		    printf("$file: $param\n");
+		    $fail = 1;
+		}
+	    }
+	}
+	elsif ($is_overlay && $line =~ /^\s*\/\s*{\s*$/)
+	{
+	    while ($line !~ /^\s*compatible\s*=/)
+	    {
+		$line = $lines[++$i];
+		if (!$line || $line =~ /{/)
+		{
+		    error("Missing overlay compatible string in '$file'");
+		    last;
+		}
+	    }
+	    my ($comp) = ($line =~ /^\s*compatible\s*=\s*(.*)?\s*;\s*$/);
+	    if ($comp)
+	    {
+		$comp =~ s/\s+//g;
+		if ($comp !~ /^\"brcm,(bcm2835|bcm2711|bcm2712)\"$/)
+		{
+		    error("Invalid overlay compatible string '$comp' in '$file'");
+		}
+		$props->{'bcm2711'} = 1 if ($comp eq 'brcm,bcm2711');
+	    }
+	}
+	elsif ($line =~ /^\s+(?:__symbols__|__fixups__|__local_fixups__)/)
+	{
+	    last;
+	}
+    }
+
+    #print(join("\n", @lines), "\n") if ($fail);
+    return ($props, sort(@params));
+}
+
+sub dtc_cpp
+{
+    my ($infile, $outfile) = @_;
+    my @dtc_cmd = (
+	$DTC,
+	@dtc_opts,
+	'-i', 'overlays', '-@', '-I', 'dts', '-O', 'dtb', '-o'
+    );
+
+    my $tmpfile = $outfile.".tmp";
+    error("Failed to CPP '$infile'")
+	if (system(@cpp_cmd, '-o', $tmpfile, $infile) != 0);
+    error("Failed to compile '$infile'")
+	if (system(@dtc_cmd, $outfile, $tmpfile) != 0);
+
+    unlink($tmpfile);
+}
+
+sub container_checker
+{
+    my ($name, $exclude, $params) = @_;
+    my $basename = $base_files[0];
+    my $base = "$TMPDIR/$basename.dtb";
+
+    foreach my $param (@$params)
+    {
+	next if (ref $param || ($exclude && $param =~ $exclude));
+	my $target = `fdtget -t bx "$TMPDIR/$name.dtbo" /__overrides__ $param`;
+	chomp($target);
+	next if ($target !~ /^0 0 0 0 /);
+	error("Failed to merge $name with $basename") if (system($DTMERGE, $verbose ? ('-d') : (), $base, $MERGED_DTB, "$TMPDIR/$name.dtbo", $param) != 0);
+	my $diffs = `dtdiff $base $MERGED_DTB`;
+	if ($diffs !~ /^\+\s*$param@/m)
+	{
+	    error("container_checker($name): parameter '$param' doesn't enable matching node");
+	}
+    }
+}
+
+sub error
+{
+    print("* $_[0]\n");
+    $fail = 1;
+}

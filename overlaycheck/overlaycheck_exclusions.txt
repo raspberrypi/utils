@@ -1,0 +1,58 @@
+=<The base DTB>
+- arm_freq
+- cache_line_size
+- core_freq
+- i2c0
+- i2c0_baudrate
+- i2c1
+- i2c1_baudrate
+- i2c2_baudrate
+- i2c2_iknowwhatimdoing
+- pwr_led_activelow
+- pwr_led_gpio
+- pwr_led_trigger
+- uart0_clkrate
+- cam0-led
+- cam0-led-ctrl
+- cam0-pwdn
+- cam0-pwdn-ctrl
++ i2c
++ i2c_arm
++ i2c_arm_baudrate
++ i2c_baudrate
++ i2c_vc
++ i2c_vc_baudrate
+=ads1015
+- chb_cfg
+- chb_datarate
+- chb_enable
+- chb_gain
+- chc_cfg
+- chc_datarate
+- chc_enable
+- chc_gain
+- chd_cfg
+- chd_datarate
+- chd_enable
+- chd_gain
+=ads1115
+- chb_cfg
+- chb_datarate
+- chb_enable
+- chb_gain
+- chc_cfg
+- chc_datarate
+- chc_enable
+- chc_gain
+- chd_cfg
+- chd_datarate
+- chd_enable
+- chd_gain
+=ov5647
+- cam0-led
+- cam0-led-ctrl
+- cam0-pwdn
+- cam0-pwdn-ctrl
+=rotary-encoder
+- rotary0_pin_a
+- rotary0_pin_b

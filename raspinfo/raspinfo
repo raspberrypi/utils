@@ -6,6 +6,78 @@
 # IP4 d.d.d.d decimal	    "s/\([0-9]\{1,3\}\.\)\{3,3\}[0-9]\{1,3\}/x.x.x.x/g"
 # mac address	            "s/\([0-9a-fA-F]\{2,2\}\:\)\{5,5\}[0-9a-fA-F]\{2,2\}/m.m.m.m/g"
 
+
+display_info_drm() {
+   # If running X then can use xrandr, otherwise
+   # dump the /sys/class entries for the displays
+
+   if xrandr --listmonitors &>/dev/null;
+   then
+      echo "Running (F)KMS and X"
+      echo
+
+      xrandr --verbose
+   else
+      echo "Running (F)KMS, console"
+      echo
+
+      for card in /sys/class/drm/card[0-9]-*;
+      do
+         echo $card
+
+         if [ -f $card/modes ];
+         then
+            cat $card/modes
+         else
+            echo "No modes found"
+         fi
+
+         if [ -f $card/edid ];
+         then
+            base64 $card/edid
+         else
+            echo "No EDID found"
+         fi
+
+      done
+   fi
+}
+
+display_info_legacy() {
+   # Legacy mode
+   echo "Running Legacy framebuffer"
+   echo
+
+   disps=`tvservice -l | awk '/Display Number/{print substr($3,1,1)}'`
+
+   tmp=$(mktemp)
+
+   for display in $disps
+   do
+      echo
+      echo "Display: " $display
+
+      tvservice -v $display -s
+      tvservice -v $display -n
+
+      tvservice -v $display -d $tmp > /dev/null
+      base64 $tmp
+   done
+
+   rm $tmp
+}
+
+display_info() {
+   # Check if we are running a KMS/DRM system
+
+   if [ -d "/sys/class/drm" ];
+   then
+      display_info_drm
+   else
+      display_info_legacy
+   fi
+}
+
 OUT=raspinfo.txt
 
 rm -f $OUT
@@ -78,69 +150,7 @@ echo "Display Information"
 echo "-------------------"
 echo
 
-# Check if we are running a KMS/DRM system
-
-if [ -d "/sys/class/drm" ];
-then
-
-   # If running X then can use xrandr, otherwise
-   # dump the /sys/class entries for the displays
-
-   if xrandr --listmonitors &>/dev/null;
-   then
-      echo "Running (F)KMS and X"
-      echo
-
-      xrandr --verbose
-   else
-      echo "Running (F)KMS, console"
-      echo
-
-      for card in /sys/class/drm/card[0-9]-*;
-      do
-         echo $card
-
-         if [ -f $card/modes ];
-         then
-            cat $card/modes
-         else
-            echo "No modes found"
-         fi
-
-         if [ -f $card/edid ];
-         then
-            base64 $card/edid
-         else
-            echo "No EDID found"
-         fi
-
-      done
-   fi
-
-else
-   # Legacy mode
-   echo "Running Legacy framebuffer"
-   echo
-
-   disps=`tvservice -l | awk '/Display Number/{print substr($3,1,1)}'`
-
-   tmp=$(mktemp)
-
-   for display in $disps
-   do
-      echo
-      echo "Display: " $display
-
-      tvservice -v $display -s
-      tvservice -v $display -n
-
-      tvservice -v $display -d $tmp > /dev/null
-      base64 $tmp
-   done
-
-   rm $tmp
-fi
-
+display_info
 
 echo
 echo "config.txt"

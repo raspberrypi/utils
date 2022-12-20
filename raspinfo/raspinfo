@@ -25,11 +25,14 @@ display_info_drm() {
       do
          echo $card
 
-         if [ -f $card/modes ];
-         then
-            cat $card/modes
-         else
-            echo "No modes found"
+         # if kmsprint isn't installed print basic mode info
+         if ! command -v kmsprint > /dev/null; then
+            if [ -f $card/modes ];
+            then
+               cat $card/modes
+            else
+               echo "No modes found"
+            fi
          fi
 
          if [ -f $card/edid ];
@@ -38,9 +41,48 @@ display_info_drm() {
          else
             echo "No EDID found"
          fi
-
+         echo
       done
    fi
+
+   # kmsprint is more useful, but not always installed
+   echo
+   if command -v kmsprint > /dev/null; then
+      kmsprint
+      echo
+      kmsprint -m
+   else
+      echo "kmsprint is not installed. Install with: sudo apt install kms++-utils"
+   fi
+
+   echo
+
+   # dump the /sys/class entries for the displays
+   cardfound=0
+   for card in `seq 0 9`;
+   do
+      if sudo test -f "/sys/kernel/debug/dri/${card}/state";
+      then
+        for hdmi in 0 1;
+        do
+         if sudo test -f "/sys/kernel/debug/dri/${card}/hdmi${hdmi}_regs";
+         then
+            echo "HDMI${hdmi}: $(sudo cat /sys/kernel/debug/dri/$card/hdmi${hdmi}_regs | grep HOTPLUG)"
+         fi
+      done
+      echo
+      echo "/sys/kernel/debug/dri/$card/state:"
+      sudo cat "/sys/kernel/debug/dri/$card/state"
+      echo
+      cardfound=1
+      fi
+   done
+   if [ "$cardfound" == "0" ];
+   then
+      echo "kms state not found"
+   fi
+   echo
+
 }
 
 display_info_legacy() {

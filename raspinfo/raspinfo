@@ -59,7 +59,10 @@ display_info_legacy() {
 
       tvservice -v $display -s
       tvservice -v $display -n
+      tvservice -v $display -m CEA
+      tvservice -v $display -m DMT
 
+      echo
       tvservice -v $display -d $tmp > /dev/null
       base64 $tmp
    done

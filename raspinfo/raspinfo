@@ -48,6 +48,16 @@ display_info_legacy() {
    echo "Running Legacy framebuffer"
    echo
 
+   for card in `seq 0 9`;
+   do
+      F="/dev/fb${card}"
+      if test -e $F;
+      then
+         echo Framebuffer: $F
+         fbset -s -fb $F
+      fi
+   done
+
    disps=`tvservice -l | awk '/Display Number/{print substr($3,1,1)}'`
 
    tmp=$(mktemp)

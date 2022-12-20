@@ -10,13 +10,13 @@
 display_info_drm() {
    # If running X then can use xrandr, otherwise
    # dump the /sys/class entries for the displays
-
-   if xrandr --listmonitors &>/dev/null;
+   if command -v xrandr > /dev/null &&
+      DISPLAY=${DISPLAY:-:0} xrandr --listmonitors &>/dev/null;
    then
       echo "Running (F)KMS and X"
       echo
 
-      xrandr --verbose
+      DISPLAY=${DISPLAY:-:0} xrandr --verbose
    else
       echo "Running (F)KMS, console"
       echo

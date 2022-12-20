@@ -70,7 +70,7 @@ display_info_legacy() {
 display_info() {
    # Check if we are running a KMS/DRM system
 
-   if [ -d "/sys/class/drm" ];
+   if [ -d "/dev/dri" ];
    then
       display_info_drm
    else

@@ -235,7 +235,13 @@ echo "vcdbg log messages"
 echo "------------------"
 echo
 
-sudo vcdbg log msg 2>&1
+if command -v vcdbg > /dev/null; then
+   sudo vcdbg log msg 2>&1
+elif command -v vclog > /dev/null; then
+   sudo vclog --msg 2>&1
+else
+   echo "vcdbg not found"
+fi
 
 echo
 echo "dmesg log"

@@ -7,3 +7,4 @@ project(vclog)
 
 #add executables
 add_executable(vclog vcdbg.c)
+install(TARGETS vclog RUNTIME DESTINATION bin)

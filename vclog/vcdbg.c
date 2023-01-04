@@ -7,7 +7,7 @@
     Copyright (c) 2022, Joanna Rousseau - Raspberry Pi Ltd All rights reserved.
 *******************************************************************************/
 #include <assert.h>
-#include <bits/types.h>
+#include <sys/types.h>
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -203,7 +203,7 @@ int32_t main(int32_t argc, char *argv[]) {
   /* Get a virtual memory ptr so point at the same adress as VC physical
   address (where all logs begin)*/
   char *mmaped_all_logs_hdr = mmap(NULL, all_logs_size, PROT_READ, MAP_PRIVATE,
-                                   dev_mem, (off_t)logs_start);
+                                   dev_mem, (uintptr_t)logs_start);
 
   /* file descriptor can be immediately closed without affecting mmap */
   close(dev_mem);

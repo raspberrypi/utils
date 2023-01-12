@@ -180,6 +180,8 @@ foreach my $overlay (@$common)
     ($r) = compare_sets($r, $ignore_vestigial->{$overlay});
     list_print("$overlay undocumented parameters", $l);
     list_print("$overlay vestigial parameter documentation", $r);
+
+    $fail ||= (@$l || @$r);
 }
 
 # Parse the Makefile

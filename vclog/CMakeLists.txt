@@ -7,4 +7,4 @@ project(vclog)
 
 #add executables
 add_executable(vclog vcdbg.c)
-install(TARGETS vclog RUNTIME DESTINATION bin)
+install(TARGETS vclog RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

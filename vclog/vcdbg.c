@@ -280,7 +280,7 @@ int32_t main(int32_t argc, char *argv[]) {
       true; /*Set to true at first and changes at the end of the loop depending
                on whether the user decided to keep checking for new messages */
   const Individual_msg_hdr_t
-      *header_current_msg;  /*header of first message to parse*/
+      *header_current_msg = NULL;  /*header of first message to parse*/
   const size_t size_of_msg_header =
       sizeof(Individual_msg_hdr_t); /*Individual messages each have headers that
                                        are always the same size, which we will
@@ -567,7 +567,7 @@ static VC_region_requested_hdr_t *find_hdr_requested_log(
       val = toc->virtual->ptr_log_msg;
       break;
     default:
-      break;
+      return NULL;
   }
 
   /*This pointer is currently pointing to the physical memory of VC :

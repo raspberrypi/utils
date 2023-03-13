@@ -58,7 +58,7 @@ while (@ARGV && $ARGV[0] =~ /^-/)
     }
     else
     {
-	error("Unknown option '$arg'");
+	fatal_error("Unknown option '$arg'");
     }
 }
 
@@ -76,7 +76,7 @@ while (@ARGV && $ARGV[0] =~ /^-/)
 
 my $kerndir = `git rev-parse --show-toplevel 2>/dev/null`;
 chomp($kerndir);
-error("This isn't a Linux repository") if (!-d "$kerndir/kernel");
+fatal_error("This isn't a Linux repository") if (!-d "$kerndir/kernel");
 
 chdir($kerndir."/arch/arm/boot/dts");
 
@@ -698,4 +698,10 @@ sub error
 {
     print("* $_[0]\n");
     $fail = 1;
+}
+
+sub fatal_error
+{
+    error(@_);
+    exit(1);
 }

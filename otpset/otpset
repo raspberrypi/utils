@@ -28,6 +28,10 @@ def ParseCommandLine():
 
     parser.add_argument("-f", "--fake", action='store_true', help="Use fake data for testing")
 
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
+
     return parser.parse_args()
 
 def ReadOTP(args):

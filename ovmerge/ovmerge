@@ -1885,7 +1885,11 @@ sub get_labels
 sub integer_value
 {
 	my ($value, $size) = @_;
-	my %masks = (1=>0xff, 2=>0xffff, 4=>0xffffffff, 8=>0xffffffffffffffff);
+	# The following line should say '8=>0xffffffffffffffff', but this upsets
+	# builds of Perl with ivsize=4. This won't give the correct result for
+	# large values but Perl will already have rejected them due to integer
+	# overflow.
+	my %masks = (1=>0xff, 2=>0xffff, 4=>0xffffffff, 8=>-1);
 	return undef if (!defined $value);
 	if ($value =~ /^(y|yes|on|true|down)?$/)
 	{

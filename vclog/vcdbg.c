@@ -164,7 +164,7 @@ static bool parse_and_print_assert_msg(char *txt, size_t size_of_text,
 src address is not a aligned to a boundary at the start of memcpy (and at the
 end of the region copied)
 dest & src MUST have the same alignment */
-static void memcpy_vc_memory(char *restrict dest, const char *restrict src,
+static void memcpy_vc_memory(char *restrict dest, const volatile char *restrict src,
                              size_t n);
 
 /******************************************************************************
@@ -715,8 +715,12 @@ static bool vc_write_ptr_within_current_msg(
   return true;
 }
 
-/*****************************************************************************/
-static void memcpy_vc_memory(char *restrict dest, const char *restrict src,
+/********************************************************************************/
+/* Note: gcc with -O2 or higher may replace most of this code with memcpy       */
+/* which causes a bus error when given an insufficiently aligned mmap-ed buffer */
+/* Using volatile disables that optimisation                                    */
+/********************************************************************************/
+static void memcpy_vc_memory(char *restrict dest, const volatile char *restrict src,
                              size_t n) {
   // Calculate non-boundary aligned bytes at start/end of region
   size_t src_offset = (uintptr_t)src % boundary;
@@ -739,7 +743,7 @@ static void memcpy_vc_memory(char *restrict dest, const char *restrict src,
   // memcpy centre region starting/ending on boundaries
   int bytes_to_memcpy = n - bytes_over_end_boundary;
   if (bytes_to_memcpy) {
-    memcpy(dest, src, bytes_to_memcpy);
+    memcpy(dest, (const void *)src, bytes_to_memcpy);
     dest += bytes_to_memcpy;
     src += bytes_to_memcpy;
     n -= bytes_to_memcpy;

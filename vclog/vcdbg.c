@@ -26,7 +26,7 @@
   Typedef & Enums & structs & Const
 *******************************************************************************/
 
-int boundary = 8; /*memory boundary in relation to counting how misaligned
+int boundary = 16; /*memory boundary in relation to counting how misaligned
                            an address is from this boundary*/
 
 bool continuously_check_logs =

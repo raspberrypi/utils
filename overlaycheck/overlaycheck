@@ -43,6 +43,7 @@ my $readme_param_pattern = '([-_a-zA-Z0-9]|<[a-z]>|<[a-z]-[a-z]>)*';
 
 my $verbose;
 my $strict_dtc;
+my $try_all;
 my $fail = 0;
 
 while (@ARGV && $ARGV[0] =~ /^-/)
@@ -55,6 +56,10 @@ while (@ARGV && $ARGV[0] =~ /^-/)
     elsif ($arg eq '-s')
     {
 	$strict_dtc = 1;
+    }
+    elsif ($arg eq '-t')
+    {
+	$try_all = 1;
     }
     else
     {
@@ -218,21 +223,23 @@ foreach my $overlay (sort(keys(%$source)))
     dtc_cpp("${overlay}-overlay.dts", "$TMPDIR/$overlay.dtbo");
 }
 
-foreach my $overlay (sort(keys(%$source)))
+if ($try_all)
 {
-    next if ($overlay =~ /^</);
-    my $overlay_props = $source->{$overlay}[0];
-    foreach my $base (@base_files)
+    foreach my $overlay (sort(keys(%$source)))
     {
-	next if (!-f "$base.dts");
-	next if (($overlay =~ /(wifi|bt)/) && ($base !~ /^(bcm2708-rpi-zero-w|bcm2709-rpi-zero-2|bcm2710-rpi-3-|bcm2711-rpi-4-)/));
-
-	next if ($overlay_props->{'bcm2711'} && $base !~ /^bcm2711/);
-	next if (system("$DTMERGE $TMPDIR/$base.dtb $MERGED_DTB $TMPDIR/$overlay.dtbo >/dev/null 2>&1") == ((-2 & 0xff) << 8));
-	error("Failed to merge $overlay with $base") if (system($DTMERGE, $verbose ? ('-d') : (), "$TMPDIR/$base.dtb", $MERGED_DTB, "$TMPDIR/$overlay.dtbo") != 0);
+	next if ($overlay =~ /^</);
+	my $overlay_props = $source->{$overlay}[0];
+	foreach my $base (@base_files)
+	{
+	    next if (!-f "../$base.dts");
+	    next if (($overlay =~ /(wifi|bt)/) && ($base !~ /^(bcm2708-rpi-zero-w|bcm2709-rpi-zero-2|bcm2710-rpi-3-|bcm2711-rpi-4-)/));
+	    next if ($overlay_props->{'bcm2711'} && $base !~ /^bcm2711/);
+	    next if (system("$DTMERGE $TMPDIR/$base.dtb $MERGED_DTB $TMPDIR/$overlay.dtbo >/dev/null 2>&1") == ((-2 & 0xff) << 8));
+	    error("Failed to merge $overlay with $base") if (system($DTMERGE, $verbose ? ('-d') : (), "$TMPDIR/$base.dtb", $MERGED_DTB, "$TMPDIR/$overlay.dtbo") != 0);
+	}
+	my $checker = $overlay_checkers{$overlay};
+	($checker->[0])->($overlay, $checker->[1], $source->{$overlay}) if ($checker);
     }
-    my $checker = $overlay_checkers{$overlay};
-    ($checker->[0])->($overlay, $checker->[1], $source->{$overlay}) if ($checker);
 }
 
 rmdir($TMPDIR);
@@ -373,7 +380,7 @@ sub parse_readme
 	    if ($blank_count == 2)
 	    {
 		error("Missing params for overlay $overlay ($linenum)") if (!$params);
-		$overlays->{ $overlay } = [ sort(@$params) ];
+		$overlays->{ $overlay } = [ sort(@{$params || []}) ];
 		$overlay = undef;
 		$params = undef;
 		$in_params = 0;

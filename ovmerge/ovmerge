@@ -721,7 +721,19 @@ sub dtparam
 				my $val = $value;
 				if ($op eq '=')
 				{
-					$val = $opdata;
+					if ($opdata ne '')
+					{
+						$val = $opdata;
+					}
+					elsif ($pos == @$ovr)
+					{
+						$val = "";
+					}
+					else
+					{
+						$val = $ovr->[$pos++];
+						die "* Expected a string or label reference in parameter '$param'\n" if (($val->[0] ne '"') && ($val->[0] ne '&'));
+					}
 				}
 				elsif ($op eq '{')
 				{
@@ -735,7 +747,7 @@ sub dtparam
 					}
 					else
 					{
-						apply_prop($node, $prop, ['"', $val]);
+						apply_prop($node, $prop, ref($val) ? $val : [ '"', $val ]);
 					}
 				}
 			}

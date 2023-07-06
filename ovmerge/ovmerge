@@ -622,7 +622,7 @@ sub dtparam
 					else
 					{
 						my $vector = get_vector($ovr->[$pos++], 4, 1);
-						die "* Expected cell value in paramter '$param'\n" if (!defined $vector);
+						die "* Expected cell value in parameter '$param'\n" if (!defined $vector);
 						$val = $vector->[0];
 					}
 				}
@@ -1239,7 +1239,7 @@ sub read_tokens
 		if ($in_comment)
 		{
 			next if ($line !~ s/^.*?\*\///);
-			$in_comment = 0 ;
+			$in_comment = 0;
 		}
 
 		if ($line =~ /^\s*#if(def|ndef)?\s+(\w+)/)
@@ -1834,7 +1834,7 @@ sub delete_prop
 		if ($prop->[0] eq $name)
 		{
 			adj_val_refs(-1, @$prop[1..$#$prop]);
-			return splice(@{$node->[1]}, $i, 1) ;
+			return splice(@{$node->[1]}, $i, 1);
 		}
 	}
 

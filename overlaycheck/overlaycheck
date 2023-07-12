@@ -83,7 +83,10 @@ my $kerndir = `git rev-parse --show-toplevel 2>/dev/null`;
 chomp($kerndir);
 fatal_error("This isn't a Linux repository") if (!-d "$kerndir/kernel");
 
-chdir($kerndir."/arch/arm/boot/dts");
+my $dtsdir = $kerndir."/arch/arm/boot/dts";
+my $dtssubdir = $dtsdir;
+$dtssubdir .= "/broadcom" if (-d $dtsdir."/broadcom");
+chdir($dtssubdir);
 
 my @cpp_cmd = ('arm-linux-gnueabihf-cpp',
 	       '-nostdinc',
@@ -126,11 +129,13 @@ my ($ignore_missing, $ignore_vestigial) = parse_exclusions($exclusions_file);
 
 # Parse the README
 
+chdir($dtsdir);
+
 my $readme = parse_readme("overlays/README");
 
 # Parse the base dts's and overlays
 
-my $source = parse_source_files();
+my $source = parse_source_files($dtsdir, $dtssubdir);
 
 # Parse the exclusions
 
@@ -191,6 +196,8 @@ foreach my $overlay (@$common)
 
 # Parse the Makefile
 
+chdir($dtsdir);
+
 my $makefile = parse_makefile("overlays/Makefile");
 
 ($left_only, $common, $right_only) =
@@ -203,13 +210,15 @@ $fail ||= (@$left_only || @$right_only);
 
 # Now some build/runtime checks
 
+chdir($dtssubdir);
+
 foreach my $base (@base_files)
 {
     next if (!-f "$base.dts");
     dtc_cpp("$base.dts", "$TMPDIR/$base.dtb");
 }
 
-chdir($kerndir."/arch/arm/boot/dts/overlays");
+chdir($dtsdir."/overlays");
 
 dtc_cpp("overlay_map.dts", "$TMPDIR/overlay_map.dtb") if (-r "overlay_map.dts");
 
@@ -311,9 +320,12 @@ sub list_print
 
 sub parse_source_files
 {
+    my ($dtsdir, $dtssubdir) = @_;
     my $overlays = {};
 
     my %params;
+
+    chdir($dtssubdir);
 
     foreach my $file (glob("bcm2708*.dts bcm2709*.dts bcm2710*.dts bcm2711*.dts"))
     {
@@ -323,6 +335,8 @@ sub parse_source_files
 	    $params{$param} = 1;
 	}
     }
+
+    chdir($dtsdir);
 
     $overlays->{'<The base DTB>'} = [ sort(keys(%params)) ];
 

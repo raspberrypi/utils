@@ -85,7 +85,7 @@ fatal_error("This isn't a Linux repository") if (!-d "$kerndir/kernel");
 
 my $dtsdir = $kerndir."/arch/arm/boot/dts";
 my $dtssubdir = $dtsdir;
-$dtssubdir .= "/broadcom" if (-d $dtsdir."/broadcom");
+$dtssubdir .= "/broadcom" if (-f $dtsdir."/broadcom/Makefile");
 chdir($dtssubdir);
 
 my @cpp_cmd = ('arm-linux-gnueabihf-cpp',

@@ -6,5 +6,5 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror -pedantic")
 project(vclog)
 
 #add executables
-add_executable(vclog vcdbg.c)
+add_executable(vclog vclog.c)
 install(TARGETS vclog RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

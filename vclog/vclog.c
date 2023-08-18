@@ -377,14 +377,24 @@ static bool prepare_vc_mapping(uint32_t vc_start, uint32_t vc_size)
 
     if ((fd = open(mem_filename, O_RDONLY)) >= 0)
     {
-        vc_map = mmap(NULL, vc_size, PROT_READ, MAP_PRIVATE,
-                      fd, (uintptr_t)vc_start);
+        long page_size = sysconf(_SC_PAGE_SIZE);
+
+        /* find start and end addresses aligned down and up to pagesize respectively */
+        off_t mmap_start = (uintptr_t)vc_start & ~(page_size - 1);
+        off_t mmap_end = ((uintptr_t)vc_start + vc_size + page_size - 1) & ~(page_size -1);
+
+        vc_map = mmap(NULL, mmap_end - mmap_start, PROT_READ, MAP_PRIVATE,
+                      fd, (uintptr_t)mmap_start);
         close(fd);
         if (vc_map != MAP_FAILED)
         {
-            id = *(uint32_t *)vc_map;
+            id = *(uint32_t *)(vc_map + vc_start - mmap_start);
             if (id == LOG_ID)
+            {
+                vc_start = mmap_start;
+                vc_size = mmap_end - mmap_start;
                 goto success;
+            }
         }
     }
 

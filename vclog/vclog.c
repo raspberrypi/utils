@@ -413,6 +413,31 @@ static void destroy_vc_mapping(void)
     }
 }
 
+
+/********************************************************************************/
+/* Note: gcc with -O2 or higher may replace most of this code with memcpy       */
+/* which causes a bus error when given an insufficiently aligned mmap-ed buffer */
+/* Using volatile disables that optimisation                                    */
+/********************************************************************************/
+static void memcpy_vc_memory(void *restrict dest, const volatile void *restrict src,
+                             size_t n)
+{
+    if ((((uintptr_t)dest | (uintptr_t)src | n) & 3) == 0)
+    {
+        uint32_t *restrict d = (uint32_t *restrict )dest;
+        const volatile uint32_t *restrict s = (const volatile uint32_t *restrict)src;
+        while (n)
+            *d++ = *s++, n -= 4;
+    }
+    else
+    {
+        uint8_t *restrict d = (uint8_t *restrict )dest;
+        const volatile uint8_t *restrict s = (const volatile uint8_t *restrict)src;
+        while (n--)
+            *d++ = *s++;
+    }
+}
+
 static void read_vc_mem(uint32_t vc_addr, uint32_t size, void *dest)
 {
     vc_addr &= 0x3fffffff;
@@ -431,7 +456,7 @@ static void read_vc_mem(uint32_t vc_addr, uint32_t size, void *dest)
     }
     else
     {
-        memcpy(dest, vc_map + vc_addr - vc_map_base, size);
+        memcpy_vc_memory(dest, vc_map + vc_addr - vc_map_base, size);
     }
 }
 

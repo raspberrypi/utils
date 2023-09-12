@@ -10,6 +10,9 @@ A collection of scripts and simple applications
 * [ovmerge](ovmerge/) - A tool for merging DT overlay source files (`*-overlay.dts`),
     flattening and sorting `.dts` files for easy comparison, displaying
     the include tree, etc.
+* [pinctrl](pinctrl/) - A more powerful replacement for raspi-gpio, a tool for
+    displaying and modifying the GPIO and pin muxing state of a system, bypassing
+    the kernel.
 * [raspinfo](raspinfo/) - A short script to dump information about the Pi. Intended for
     the submission of bug reports.
 * [vclog](vclog/) - A tool to get VideoCore 'assert' or 'msg' logs

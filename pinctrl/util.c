@@ -165,7 +165,7 @@ uint64_t dt_parse_addr(const char *node)
     uint32_t *ranges = NULL;
     unsigned ranges_cells = 0;
     uint64_t addr = INVALID_ADDRESS;
-    unsigned npa, nps, nca;
+    unsigned npa, nps, nca = 0;
 
     parent = buf1;
     nextparent = buf2;

@@ -12,7 +12,7 @@ The improvements over raspi-gpio include:
 * GPIOs can be referred to by name or number.
 * Pin mode (-p) switches the UI to be in terms of 40-way header pin numbers.
 * The "poll" command causes it to constantly monitor the specified pins,
-  displaying any level changes it see. For slow signals (up to a few hundred
+  displaying any level changes it sees. For slow signals (up to a few hundred
   kHz) it can act as a basic logic analyser.
 * The "get" and "set" keywords are optional in most cases.
 * Splitting into a general gpiolib library and a separate client application

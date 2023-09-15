@@ -21,6 +21,7 @@ typedef struct GPIO_CHIP_INSTANCE_
     const GPIO_CHIP_T *chip;
     const char *name;
     const char *dtnode;
+    int mem_fd;
     void *priv;
     uint64_t phys_addr;
     unsigned num_gpios;
@@ -409,6 +410,7 @@ int gpiolib_init(void)
     const GPIO_CHIP_T *chip;
     GPIO_CHIP_INSTANCE_T *inst;
     char pathbuf[FILENAME_MAX];
+    char gpiomem_idx[4];
     const char *dtpath = "/proc/device-tree";
     const char *p;
     char *alias = NULL, *names, *end, *compatible;
@@ -442,10 +444,12 @@ int gpiolib_init(void)
     for (i = 0; ; i++)
     {
         sprintf(pathbuf, "gpio%d", i);
+        sprintf(gpiomem_idx, "%d", i);
         alias = dt_read_prop("/aliases", pathbuf, NULL);
         if (!alias && i == 0)
         {
             alias = dt_read_prop("/aliases", "gpio", NULL);
+            gpiomem_idx[0] = 0;
         }
         if (!alias)
             break;
@@ -481,6 +485,8 @@ int gpiolib_init(void)
             return -1;
         }
 
+        sprintf(pathbuf, "/dev/gpiomem%s", gpiomem_idx);
+        inst->mem_fd = open(pathbuf, O_RDWR|O_SYNC);
     }
 
     gpio_base = 0;
@@ -636,11 +642,9 @@ int gpiolib_init_by_name(const char *name)
 
 int gpiolib_mmap(void)
 {
-    int mem_fd;
+    int pagesize = getpagesize();
+    int mem_fd = -1;
     unsigned i;
-
-    if ((mem_fd = open("/dev/mem", O_RDWR|O_SYNC) ) < 0)
-        return errno;
 
     for (i = 0; i < num_gpio_chips; i++)
     {
@@ -653,21 +657,39 @@ int gpiolib_mmap(void)
         inst = &gpio_chips[i];
         chip = inst->chip;
 
-        align = inst->phys_addr & 0xffff;
-        gpio_map = mmap(
-            NULL,                   /* Any address in our space will do */
-            chip->size + align,     /* Map length */
-            PROT_READ | PROT_WRITE, /* Enable reading & writing */
-            MAP_SHARED,             /* Shared with other processes */
-            mem_fd,                 /* File to map */
-            inst->phys_addr - align /* Offset to GPIO peripheral */
-        );
+        align = inst->phys_addr & (pagesize - 1);
+
+        if (inst->mem_fd >= 0)
+        {
+            gpio_map = mmap(
+                NULL,                   /* Any address in our space will do */
+                chip->size + align,     /* Map length */
+                PROT_READ | PROT_WRITE, /* Enable reading & writing */
+                MAP_SHARED,             /* Shared with other processes */
+                inst->mem_fd,           /* File to map */
+                0                       /* Offset to GPIO peripheral */
+                );
+        }
+        else
+        {
+            if (mem_fd < 0)
+            {
+                mem_fd = open("/dev/mem", O_RDWR|O_SYNC);
+                if (mem_fd < 0)
+                    return errno;
+            }
+            gpio_map = mmap(
+                NULL,                   /* Any address in our space will do */
+                chip->size + align,     /* Map length */
+                PROT_READ | PROT_WRITE, /* Enable reading & writing */
+                MAP_SHARED,             /* Shared with other processes */
+                mem_fd,                 /* File to map */
+                inst->phys_addr - align /* Offset to GPIO peripheral */
+                );
+        }
 
         if (gpio_map == MAP_FAILED)
-        {
-            close(mem_fd);
             return errno;
-        }
 
         new_priv = chip->interface->gpio_probe_instance(inst->priv,
                                                         (void *)((char *)gpio_map + align));

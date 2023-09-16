@@ -228,7 +228,13 @@ echo "raspi-gpio settings"
 echo "-------------------"
 echo
 
-raspi-gpio get
+if command -v raspi-gpio > /dev/null; then                                                                         
+   raspi-gpio get 2>&1                                                                                    
+elif command -v pinctrl > /dev/null; then                                                                       
+   sudo pinctrl 2>&1                                                                                      
+else                                                                                                          
+   echo "raspi-gpio not found"                                                                                     
+fi                                                                                                            
 
 echo
 echo "vcdbg log messages"

@@ -224,11 +224,17 @@ echo "-----------"
 cat /proc/cmdline
 
 echo
-echo "raspi-gpio settings"
-echo "-------------------"
+echo "pin configuration"
+echo "-----------------"
 echo
 
-raspi-gpio get
+if command -v pinctrl > /dev/null; then
+   sudo pinctrl 2>&1
+elif command -v raspi-gpio > /dev/null; then
+   raspi-gpio get 2>&1
+else
+   echo "pinctrl/raspi-gpio not found"
+fi
 
 echo
 echo "vcdbg log messages"

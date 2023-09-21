@@ -101,7 +101,7 @@ static int gpio_get_interface(unsigned gpio,
 
 int gpio_num_is_valid(unsigned gpio)
 {
-    return !!gpio_names[gpio];
+    return gpio < MAX_GPIO_PINS && !!gpio_names[gpio];
 }
 
 GPIO_DIR_T gpio_get_dir(unsigned gpio)

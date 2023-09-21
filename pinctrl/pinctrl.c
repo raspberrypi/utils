@@ -434,6 +434,12 @@ int main(int argc, char *argv[])
             }
             p += len;
 
+            if (*p == '\0' && argc && (argv[0][0] == '-' || argv[0][0] == ','))
+            {
+                p = *(argv++);
+                argc--;
+            }
+
             if (*p == '-')
             {
                 p++;
@@ -474,6 +480,11 @@ int main(int argc, char *argv[])
             {
                 gpiomask[gpio/32] |= (1 << (gpio % 32));
                 gpio++;
+            }
+            if (*p == '\0' && argc && argv[0][0] == ',')
+            {
+                p = *(argv++);
+                argc--;
             }
             if (*p == '\0')
             {

@@ -410,13 +410,13 @@ int main(int argc, char *argv[])
         while (p)
         {
             unsigned gpio, gpio2;
-            int len;
-            ret = sscanf(p, "%u%n", &gpio, &len);
-            if (ret == 1 && gpio >= num_gpios)
+            int len, len2;
+            len = strcspn(p, "-,");
+            ret = sscanf(p, "%u%n", &gpio, &len2);
+            if (ret == 1 && len == len2 && gpio >= num_gpios)
                 break;
-            else if (ret != 1)
+            else if (ret != 1 || len != len2)
             {
-                len = strcspn(p, "-,");
                 gpio = gpio_get_gpio_by_name(p, len);
                 if (gpio == GPIO_INVALID)
                     break;
@@ -443,12 +443,12 @@ int main(int argc, char *argv[])
             if (*p == '-')
             {
                 p++;
-                ret = sscanf(p, "%u%n", &gpio2, &len);
-                if (ret == 1 && gpio2 >= num_gpios)
+                len = strcspn(p, "-,");
+                ret = sscanf(p, "%u%n", &gpio2, &len2);
+                if (ret == 1 && len == len2 && gpio2 >= num_gpios)
                     break;
-                else if (ret != 1)
+                else if (ret != 1 || len != len2)
                 {
-                    len = strcspn(p, "-,");
                     gpio2 = gpio_get_gpio_by_name(p, len);
                     if (gpio2 == GPIO_INVALID)
                         break;

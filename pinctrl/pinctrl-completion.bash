@@ -6,7 +6,7 @@ _pinctrl ()
     _init_completion -s || return;
 
     i=1
-    while [[ ${COMP_WORDS[$i]} =~ ^- ]]; do
+    while [[ $i -lt $cword && ${COMP_WORDS[$i]} =~ ^- ]]; do
         arg=${COMP_WORDS[$i]}
         if [[ "$arg" == "-c" ]]; then
             chip=${COMP_WORDS[$((i + 1))]}
@@ -19,7 +19,7 @@ _pinctrl ()
         fi
     done
 
-    if [[ ${COMP_WORDS[$i]} =~ ^(get|set|funcs|poll|help) ]]; then
+    if [[ $i -lt $cword && ${COMP_WORDS[$i]} =~ ^(get|set|funcs|poll|help) ]]; then
         cmd=${COMP_WORDS[$i]}
         i=$((i + 1))
     elif [[ ${COMP_WORDS[$i]} =~ ^[A-Z0-9] ]]; then
@@ -70,7 +70,7 @@ _pinctrl ()
             CHIPS=($(pinctrl -v -p 0 | grep 'gpios)' | cut -d' ' -f4 | sort | uniq))
             chips="${CHIPS[@]}"
             COMPREPLY+=($(compgen -W "$chips" -- $cur))
-        elif [[ "$cur" == "-" ]]; then
+        elif [[ "$cur" =~ ^- ]]; then
             COMPREPLY+=($(compgen -W "-p -h -v -c" -- $cur))
         elif [[ "$chip" == "" ]]; then
             COMPREPLY+=($(compgen -W "get set poll funcs help" -- $cur))

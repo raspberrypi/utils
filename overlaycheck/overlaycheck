@@ -25,6 +25,7 @@ my @base_files = (
     "bcm2710-rpi-3-b-plus",
     "bcm2710-rpi-cm3",
     "bcm2710-rpi-zero-2",
+    "bcm2712-rpi-5-b",
 );
 
 $ENV{'LD_LIBRARY_PATH'} = "$ENV{'HOME'}/lib";
@@ -240,9 +241,10 @@ if ($try_all)
 	my $overlay_props = $source->{$overlay}[0];
 	foreach my $base (@base_files)
 	{
-	    next if (!-f "../$base.dts");
-	    next if (($overlay =~ /(wifi|bt)/) && ($base !~ /^(bcm2708-rpi-zero-w|bcm2709-rpi-zero-2|bcm2710-rpi-3-|bcm2711-rpi-4-)/));
+	    next if (!-f "$TMPDIR/$base.dtb");
+	    next if (($overlay =~ /(wifi|bt)/) && ($base !~ /^(bcm2708-rpi-zero-w|bcm2709-rpi-zero-2|bcm2710-rpi-3-|bcm2711-rpi-(4|cm4$)|bcm2712-rpi-5)/));
 	    next if ($overlay_props->{'bcm2711'} && $base !~ /^bcm2711/);
+	    next if ($overlay_props->{'bcm2712'} && $base !~ /^bcm2712/);
 	    next if (system("$DTMERGE $TMPDIR/$base.dtb $MERGED_DTB $TMPDIR/$overlay.dtbo >/dev/null 2>&1") == ((-2 & 0xff) << 8));
 	    error("Failed to merge $overlay with $base") if (system($DTMERGE, $verbose ? ('-d') : (), "$TMPDIR/$base.dtb", $MERGED_DTB, "$TMPDIR/$overlay.dtbo") != 0);
 	}
@@ -327,7 +329,7 @@ sub parse_source_files
 
     chdir($dtssubdir);
 
-    foreach my $file (glob("bcm2708*.dts bcm2709*.dts bcm2710*.dts bcm2711*.dts"))
+    foreach my $file (glob("bcm2708*.dts bcm2709*.dts bcm2710*.dts bcm2711*.dts bcm2712*.dts"))
     {
 	foreach my $param (get_params($file))
 	{
@@ -700,6 +702,7 @@ sub get_params
 		    error("Invalid overlay compatible string '$comp' in '$file'");
 		}
 		$props->{'bcm2711'} = 1 if ($comp eq 'brcm,bcm2711');
+		$props->{'bcm2712'} = 1 if ($comp eq 'brcm,bcm2712');
 	    }
 	}
 	elsif ($line =~ /^\s+(?:__symbols__|__fixups__|__local_fixups__)/)

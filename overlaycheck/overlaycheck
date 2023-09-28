@@ -394,7 +394,19 @@ sub parse_readme
 	    if ($blank_count == 2)
 	    {
 		error("Missing params for overlay $overlay ($linenum)") if (!$params);
-		$overlays->{ $overlay } = [ sort(@{$params || []}) ];
+		if (ref $params)
+		{
+		    $overlays->{ $overlay } = [ sort(@{$params}) ];
+		}
+		elsif ($params)
+		{
+		    $overlays->{ $overlay } = $params;
+		}
+		else
+		{
+		    $overlays->{ $overlay } = [ ];
+		}
+
 		$overlay = undef;
 		$params = undef;
 		$in_params = 0;
@@ -429,6 +441,11 @@ sub parse_readme
 	{
 	    error("Bad formatting in README ($linenum)") if ($1 ne '   ');
 	    error("Info label with no Name? ($linenum)") if (!$overlay);
+	    my $info = $2;
+	    if ($2 =~ /^See ($word_pattern)(?:\s+\(.*)?$/)
+	    {
+		$params = $1;
+	    }
 	}
 	elsif ($line =~ /^Load:(\s*)(.*)\s*$/)
 	{
@@ -514,6 +531,25 @@ sub parse_readme
 		error("Bad formatting in README ($linenum)")
 		    if (($indent < 8) ||
 			(($indent > 8) && ($indent < $descr_column)));
+	    }
+	}
+    }
+
+    # Resolve inter-overlay ("See") references
+
+    foreach my $overlay (keys(%$overlays))
+    {
+	my $src = $overlays->{$overlay};
+	if (!ref $src)
+	{
+	    $src = $overlays->{$src};
+	    if (ref $src)
+	    {
+		$overlays->{$overlay} = $src;
+	    }
+	    else
+	    {
+		error("Chained 'See' link from $overlay to $src") if (!ref $src)
 	    }
 	}
     }

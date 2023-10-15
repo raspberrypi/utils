@@ -72,6 +72,8 @@ enum
 };
 
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define ARRAY_SIZE(_a) (sizeof(_a)/sizeof(_a[0]))
+
 #define FBIODMACOPY _IOW('z', 0x22, struct fb_dmacopy)
 
 #ifdef DEBUG
@@ -354,25 +356,28 @@ exit:
 
 static bool prepare_vc_mapping(uint32_t vc_start, uint32_t vc_size)
 {
-    const char *fb_filename = "/dev/fb0";
+    const char *dma_filenames[] = { "/dev/vc-mem", "/dev/fb0" };
     const char *mem_filename = "/dev/mem";
+    struct fb_dmacopy ioparam;
     uint32_t id;
-    int fd;
+    int err, fd, i;
 
-    if ((fd = open(fb_filename, O_RDWR | O_SYNC)) >= 0)
+    ioparam.dst = &id;
+    ioparam.src = vc_start;
+    ioparam.length = sizeof(id);
+
+    for (i = 0; i < (int)ARRAY_SIZE(dma_filenames); i++)
     {
-        struct fb_dmacopy ioparam;
-        int err;
-        ioparam.dst = &id;
-        ioparam.src = vc_start;
-        ioparam.length = sizeof(id);
-        err = ioctl(fd, FBIODMACOPY, &ioparam);
-        if (err == 0 && id == LOG_ID)
+        if ((fd = open(dma_filenames[i], O_RDWR | O_SYNC)) >= 0)
         {
-            dma_fd = fd;
-            goto success;
+            err = ioctl(fd, FBIODMACOPY, &ioparam);
+            if (err == 0 && id == LOG_ID)
+            {
+                dma_fd = fd;
+                goto success;
+            }
+            close(fd);
         }
-        close(fd);
     }
 
     if ((fd = open(mem_filename, O_RDONLY)) >= 0)

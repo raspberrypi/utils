@@ -155,7 +155,7 @@ static int do_gpio_get(unsigned int gpio)
 
     printf(" %s | %s // %s%s%s\n",
            gpio_get_pull_name(gpio_get_pull(gpio)),
-           gpio_get_level(gpio) ? "hi" : "lo",
+           (gpio_get_level(gpio) == 1) ? "hi" : (gpio_get_level(gpio) == 0) ? "lo" : "--",
            name ? name : "",
            name ? " = " : "",
            gpio_get_gpio_fsel_name(gpio, fsel));

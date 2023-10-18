@@ -338,10 +338,14 @@ static int rp1_gpio_get_level(void *priv, unsigned gpio)
 {
     volatile uint32_t *base = priv;
     int bank, offset;
+    uint32_t pad_reg;
     uint32_t reg;
     int level;
 
     rp1_gpio_get_bank(gpio, &bank, &offset);
+    pad_reg = rp1_gpio_pads_read(base, bank, offset);
+    if (!(pad_reg & RP1_PADS_IE_SET))
+	return -1;
     reg = rp1_gpio_sys_rio_sync_in_read(base, bank, offset);
     level = (reg & (1U << offset)) ? 1 : 0;
 

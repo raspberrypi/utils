@@ -121,6 +121,7 @@ static int do_gpio_get(unsigned int gpio)
     unsigned int num = gpio;
     const char *name;
     int fsel;
+    int level;
 
     if (pin_mode)
     {
@@ -153,9 +154,11 @@ static int do_gpio_get(unsigned int gpio)
     if (pin_mode && strchr(name, '/'))
         name = strchr(name, '/') + 1;
 
+    level = gpio_get_level(gpio);
+
     printf(" %s | %s // %s%s%s\n",
            gpio_get_pull_name(gpio_get_pull(gpio)),
-           (gpio_get_level(gpio) == 1) ? "hi" : (gpio_get_level(gpio) == 0) ? "lo" : "--",
+           (level == 1) ? "hi" : (level == 0) ? "lo" : "--",
            name ? name : "",
            name ? " = " : "",
            gpio_get_gpio_fsel_name(gpio, fsel));

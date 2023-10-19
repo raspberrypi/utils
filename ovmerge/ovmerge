@@ -98,6 +98,7 @@ my $retcode = 0;
 my $query = 0;
 my $trace_prop;
 my $trace_label;
+my $indent_str = "\t";
 
 my @redo_comments;
 my @cmdline;
@@ -179,6 +180,22 @@ while ($ARGV[0] =~ /^-/)
 	elsif ($arg eq '-q')
 	{
 		$query = 1;
+	}
+	elsif ($arg eq '-S')
+	{
+		my $indent_spaces = shift @ARGV;
+		if (!defined $indent_spaces)
+		{
+			print STDERR ("* Spaces count parameter missing\n");
+			usage();
+		}
+		elsif ($indent_spaces !~ /^\d+$/)
+		{
+			print STDERR ("* Invalid spaces count parameter. Expected an integer.\n");
+			usage();
+		}
+		$indent_str = ' ' x $indent_spaces;
+		push @cmdline, $arg, $indent_spaces;
 	}
 	else
 	{
@@ -1161,17 +1178,15 @@ sub resolve_alias
 sub dump_node
 {
 	my ($node, $depth) = @_;
-	my $indent = "\t" x $depth;
+	my $indent = $indent_str x $depth;
 
 	print($indent, join(': ', get_labels($node), $node->[0]), " {\n");
-
-	$indent = "\t" x $depth;
 
 	# Properties
 	foreach my $prop (get_props($node))
 	{
 		my @terms;
-		print($indent, "\t", $prop->[0]);
+		print($indent, $indent_str, $prop->[0]);
 		for (my $i = 1; $i < @$prop; $i++)
 		{
 			my $chunk = $prop->[$i];
@@ -2068,6 +2083,7 @@ sub usage
 	print STDERR ("    -p      Emulate Pi firmware manipulation\n");
 	print STDERR ("    -r      Redo command comment in named files (c.f. '-c')\n");
 	print STDERR ("    -s      Sort nodes and properties (for easy comparison)\n");
+	print STDERR ("    -S <n>     Instead of tabs, use 'n' spaces for indentation\n");
 	print STDERR ("    -t      Trace\n");
 	print STDERR ("    -w      Show warnings\n");
 

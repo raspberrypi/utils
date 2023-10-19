@@ -2,13 +2,31 @@ cmake_minimum_required(VERSION 3.10)
 
 include(GNUInstallDirs)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror -pedantic")
-
 #set project name
 project(dtmerge)
 
-#add executables
-add_executable(dtmerge dtmerge.c dtoverlay.c)
-target_link_libraries(dtmerge fdt)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror")
+
+if (CMAKE_COMPILER_IS_GNUCC)
+   add_definitions (-ffunction-sections)
+endif ()
+
+add_library (dtovl ${STATIC} dtoverlay.c)
+target_link_libraries(dtovl fdt)
+
+add_executable(dtmerge dtmerge.c)
+target_link_libraries(dtmerge dtovl)
 install(TARGETS dtmerge RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES dtmerge.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
+
+add_executable(dtoverlay dtoverlay_main.c utils.c)
+target_link_libraries(dtoverlay dtovl)
+install(TARGETS dtoverlay RUNTIME DESTINATION bin)
+install(FILES dtoverlay.1 DESTINATION man/man1)
+
+add_custom_command(TARGET dtoverlay POST_BUILD COMMAND ln;-sf;dtoverlay;dtparam)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/dtparam DESTINATION bin)
+install(FILES dtparam.1 DESTINATION man/man1)
+
+set(DTOVERLAY_SCRIPTS dtoverlay-pre dtoverlay-post)
+install(PROGRAMS ${DTOVERLAY_SCRIPTS} DESTINATION bin)

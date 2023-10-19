@@ -2,7 +2,7 @@
 A collection of scripts and simple applications
 
 * [dtmerge](dtmerge/) - A tool for applying compiled DT overlays (`*.dtbo`) to base Device
-    Tree files (`*.dtb`)
+    Tree files (`*.dtb`). Also includes the `dtoverlay` and `dtparam` utilities.
 * [otpset](otpset/) - A short script to help with reading and setting the customer OTP
     bits.
 * [overlaycheck](overlaycheck/) - A tool for validating the overlay files and README in a

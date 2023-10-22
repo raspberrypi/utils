@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
 
+include(GNUInstallDirs)
+
+#set project name
+project(vcgencmd)
+
 add_executable(vcgencmd vcgencmd.c)
-install(TARGETS vcgencmd RUNTIME DESTINATION bin)
-install(FILES vcgencmd.1 DESTINATION man/man1)
+install(TARGETS vcgencmd RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES vcgencmd.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)

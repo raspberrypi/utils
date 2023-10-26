@@ -73,6 +73,8 @@
 
 use strict;
 use integer;
+use warnings;
+
 use POSIX qw(strftime);
 
 my %elem_sizes = (
@@ -97,8 +99,8 @@ my $no_dts = 0;
 my $cur_dt;
 my $retcode = 0;
 my $query = 0;
-my $trace_prop;
-my $trace_label;
+my $trace_prop = '';
+my $trace_label = '';
 my $indent_str = "\t";
 
 my @redo_comments;
@@ -596,7 +598,7 @@ sub parse_lookup_table
 				$val = (defined $sub) ? $sub : $key;
 			}
 		}
-		last if ($sep eq '}');
+		last if (($sep || '') eq '}');
 	}
 
 	die "* No match for '$value'\n" if (defined $value && !defined $val);
@@ -628,7 +630,7 @@ sub dtparam
 			if ($decl =~ /^([-a-zA-Z0-9_,]+)([.;:#])(\d+)(?:(=|\{)(.*))?$/)
 			{
 				# Integer parameter
-				my ($prop, $type, $offset, $op, $opdata) = ($1, $2, $3, $4, $5);
+				my ($prop, $type, $offset, $op, $opdata) = ($1, $2, $3, $4 || '', $5);
 				my $size = $elem_sizes{$type};
 				my $val = $value;
 				if ($op eq '=')
@@ -680,7 +682,7 @@ sub dtparam
 			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)([\?\!])(?:(=|\{)(.*))?$/)
 			{
 				# boolean
-				my ($prop, $sense, $op, $opdata) = ($1, $2, $3, $4);
+				my ($prop, $sense, $op, $opdata) = ($1, $2, $3 || '', $4);
 				my $val = $value;
 				if ($op eq '=')
 				{
@@ -717,7 +719,7 @@ sub dtparam
 			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)\[(?:(=|\{)(.*))?$/)
 			{
 				# byte array
-				my ($prop, $op, $opdata) = ($1, $2, $3);
+				my ($prop, $op, $opdata) = ($1, $2 || '', $3);
 				my $val = $value;
 				if ($op eq '=')
 				{
@@ -735,7 +737,7 @@ sub dtparam
 			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)(?:(=|\{)(.*))?$/)
 			{
 				# string
-				my ($prop, $op, $opdata) = ($1, $2, $3);
+				my ($prop, $op, $opdata) = ($1, $2 || '', $3);
 				my $val = $value;
 				if ($op eq '=')
 				{
@@ -745,7 +747,7 @@ sub dtparam
 					}
 					elsif ($pos == @$ovr)
 					{
-						$val = "";
+						$val = '';
 					}
 					else
 					{
@@ -800,7 +802,7 @@ sub dtparam
 					$frag->[2]->[0]->[0] = ($bool ? '__overlay__' : '__dormant__');
 				}
 			}
-			die "* Invalid override 3:$param\n" if (pos($decl) != undef);
+			die "* Invalid override 3:$param\n" if (defined(pos($decl)));
 		}
 	}
 }
@@ -1402,7 +1404,7 @@ sub read_tokens
 			}
 			push @$tokens, $tok;
 		}
-		if ($line !~ /\G[\r\n]*$/c)
+		if ($line !~ /\G[\r\n]*$/cg)
 		{
 			$line = substr($line, pos($line));
 			die "* Bad token at '$line'\n";
@@ -1650,8 +1652,7 @@ sub get_node
 sub is_node_empty
 {
 	my ($node) = @_;
-	return get_children($node) == 0 &&
-		get_props($node) == 0;
+	return !get_children($node) && !get_props($node);
 }
 
 sub get_child
@@ -1738,7 +1739,7 @@ sub renumber_fragments
 	{
 		for (my $pos = 1; $pos < @$ovr; $pos++)
 		{
-			if (get_label_ref($ovr->[$pos]) eq '0')
+			if ((get_label_ref($ovr->[$pos]) || '') eq '0')
 			{
 				$pos++;
 				while ($ovr->[$pos]->[1] =~ /\G[=!+-](\d+)/g)

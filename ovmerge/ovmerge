@@ -63,6 +63,7 @@
 # '=' - literal assignment (if a string, the literal after the =), if an integer,
 #       either the in-band integer or the next cell (useful for phandles).
 #   "prop=foo"         // String literal assignment
+#   "prop=", &spi      // String path literal assignment (the path to the node is substituted, used for aliases)
 #   "prop:0=0"         // Integer literal assignment
 #   "prop:0=", <&spi>; // Integer cell assignment
 #

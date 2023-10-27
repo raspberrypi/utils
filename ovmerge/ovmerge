@@ -493,6 +493,9 @@ sub dtparse
 		}
 	}
 
+	# Check the fragment order
+	ordercheck($dt, {}) if ($dt->{'plugin'});
+
 	# Check the overrides
 	my $overrides = get_node($dt, '/__overrides__');
 	foreach my $param (@{$overrides->[1]})
@@ -978,6 +981,43 @@ sub ovapply
 	}
 }
 
+sub ordercheck
+{
+	my ($ov, $applied) = @_;
+
+	# Try to apply fragments that target other fragments within the overlay
+	foreach my $fragment (get_fragments($ov))
+	{
+		my $overlay = get_child($fragment, '__overlay__');
+		next if (!$overlay);
+		my $target_node;
+		my $target = get_prop($fragment, 'target');
+		if ($target)
+		{
+			my $label = get_label_ref($target->[1]);
+			die "* Invalid target reference\n" if ($label !~ /^&(.*)/);
+			$target_node = $ov->{'labels'}->{$1};
+			if ($target_node)
+			{
+				my $target_fragment = fragment_of($target_node);
+				die "* $fragment->[0] should precede " . ($target_fragment ? $target_fragment->[0] : "fragment@?") . "\n"
+				    if ($applied->{$target_node});
+				set_applied($overlay, $applied);
+			}
+		}
+	}
+}
+
+sub set_applied
+{
+	my ($node, $applied) = @_;
+	$applied->{$node} = 1;
+	foreach my $subnode (get_children($node))
+	{
+		set_applied($subnode, $applied);
+	}
+}
+
 sub parse_node
 {
 	my ($state, $parent, $depth, $node, @newlabels) = @_;
@@ -1176,6 +1216,14 @@ sub resolve_alias
 	{
 		return get_node($dt, $alias->[1][1]);
 	}
+}
+
+sub fragment_of
+{
+	my ($node) = @_;
+	return undef if (!$node);
+	return $node if ($node->[0] =~ /^fragment@/);
+	return fragment_of($node->[4]);
 }
 
 sub dump_node

@@ -62,7 +62,7 @@ OVERLAY_HELP_STATE_T *overlay_help_open(const char *helpfile)
     {
         state = calloc(1, sizeof(OVERLAY_HELP_STATE_T));
         if (!state)
-                fatal_error("Out of memory");
+            fatal_error("Out of memory");
         state->fp = fp;
         state->line_pos = -1;
         state->rec_pos = -1;
@@ -213,7 +213,7 @@ static int overlay_help_get_line(OVERLAY_HELP_STATE_T *state)
     if (state->line_pos >= 0)
 	return state->line_len;
 
-get_next_line:
+  get_next_line:
     state->line_buf[sizeof(state->line_buf) - 1] = ' ';
     line_len = -1;
     if (fgets(state->line_buf, sizeof(state->line_buf), state->fp))
@@ -393,7 +393,7 @@ char *string_vec_add(STRING_VEC_T *vec, const char *str, int len)
 	copy[len] = '\0';
     }
     else
-       copy = strdup(str);
+        copy = strdup(str);
 
     if (!copy)
 	fatal_error("Out of memory");

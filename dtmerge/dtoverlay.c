@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016-2019 Raspberry Pi (Trading) Ltd.
+Copyright (c) 2016-2023 Raspberry Pi Ltd.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -74,6 +74,12 @@ static int dtoverlay_debug_enabled = 0;
 static DTBLOB_T *overlay_map;
 static const char *platform_name;
 static int platform_name_len;
+
+static void (*cell_changed_callback)(DTBLOB_T *, int, const char *, int, int);
+static void (*intra_fragment_merged_callback)(DTBLOB_T *, int, int);
+
+static const void *override_data_start;
+static const void *cell_source;
 
 static int strmemcmp(const char *mem, int mem_len, const char *str)
 {
@@ -602,7 +608,9 @@ static int dtoverlay_merge_fragment(DTBLOB_T *base_dtb, int target_off,
             err = fdt_appendprop(base_dtb->fdt, target_off, prop_name, prop_val, prop_len);
         }
         else
+        {
             err = fdt_setprop(base_dtb->fdt, target_off, prop_name, prop_val, prop_len);
+        }
     }
 
     // Merge each subnode of the node
@@ -1167,7 +1175,6 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
         }
 
         target_off = dtoverlay_get_target_offset(NULL, overlay_dtb, frag_off);
-
         if (target_off < 0)
             continue;
 
@@ -1175,6 +1182,9 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
         // We can't just call dtoverlay_merge_fragment with the overlay_dtb
         // as source and destination because the source is not expected to
         // change. Instead, clone the overlay, apply the fragment, then switch.
+
+        if (intra_fragment_merged_callback)
+            (*intra_fragment_merged_callback)(overlay_dtb, overlay_off, target_off);
 
         if (!overlay_copy)
         {
@@ -1192,6 +1202,7 @@ int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
                                        overlay_off, 0);
         if (err)
             break;
+
         // Swap the buffers
         {
             void *temp = overlay_dtb->fdt;
@@ -1439,6 +1450,170 @@ int dtoverlay_filter_symbols(DTBLOB_T *dtb)
     }
 
     return 0;
+}
+
+const char *dtoverlay_find_fixup(DTBLOB_T *dtb, const char *fixup_loc)
+{
+    int fixups_off;
+
+    fixups_off = fdt_path_offset(dtb->fdt, "/__fixups__");
+
+    if (fixups_off > 0)
+    {
+        int fixup_off;
+
+        for (fixup_off = fdt_first_property_offset(dtb->fdt, fixups_off);
+             fixup_off >= 0;
+             fixup_off = fdt_next_property_offset(dtb->fdt, fixup_off))
+        {
+            const char *fixups_stringlist;
+            const char *symbol_name;
+            int list_len;
+
+            fixups_stringlist = fdt_getprop_by_offset(dtb->fdt, fixup_off,
+                                                      &symbol_name, &list_len);
+            if (fdt_stringlist_contains(fixups_stringlist, list_len, fixup_loc) > 0)
+                return symbol_name;
+        }
+    }
+
+    return NULL;
+}
+
+int dtoverlay_add_fixup(DTBLOB_T *dtb, const char *symbol, const char *fixup_loc)
+{
+    int loc_len = strlen(fixup_loc);
+    int fixups_off;
+
+    fixups_off = fdt_path_offset(dtb->fdt, "/__fixups__");
+    assert(fixups_off > 0);
+
+    if (fixups_off < 0)
+        return fixups_off;
+
+    return fdt_appendprop(dtb->fdt, fixups_off, symbol, fixup_loc, loc_len + 1);
+}
+
+static const char *stringlist_find(const char *strlist, int listlen, const char *str, int len)
+{
+    const char *p;
+
+    while (listlen >= len) {
+        if (memcmp(str, strlist, len + 1) == 0)
+            return strlist;
+        p = memchr(strlist, '\0', listlen);
+        if (!p)
+            return NULL; /* malformed strlist.. */
+        listlen -= (p-strlist) + 1;
+        strlist = p + 1;
+    }
+
+    return NULL;
+}
+
+int dtoverlay_delete_fixup(DTBLOB_T *dtb, const char *fixup_loc)
+{
+    int loc_len = strlen(fixup_loc);
+    int fixups_off;
+
+    fixups_off = fdt_path_offset(dtb->fdt, "/__fixups__");
+
+    if (fixups_off > 0)
+    {
+        int fixup_off;
+
+        for (fixup_off = fdt_first_property_offset(dtb->fdt, fixups_off);
+             fixup_off >= 0;
+             fixup_off = fdt_next_property_offset(dtb->fdt, fixup_off))
+        {
+            const char *fixups_stringlist;
+            const char *symbol_name;
+            const char *match;
+            int list_len;
+
+            fixups_stringlist = fdt_getprop_by_offset(dtb->fdt, fixup_off,
+                                                      &symbol_name, &list_len);
+
+            match = stringlist_find(fixups_stringlist, list_len, fixup_loc, loc_len);
+            if (match)
+            {
+                int match_len = loc_len + 1;
+                if (match_len == list_len)
+                {
+                    /* This was the only fixup - the symbol is no longer referenced */
+                    return fdt_delprop(dtb->fdt, fixups_off, symbol_name);
+                }
+                else
+                {
+                    char *buf = malloc(list_len - match_len);
+                    int match_off = match - fixups_stringlist;
+                    int after_match = list_len - (match_off + match_len);
+                    int err;
+                    if (match_off)
+                        memcpy(buf, fixups_stringlist, match_off);
+                    if (after_match)
+                        memcpy(buf + match_off, match + match_len, after_match);
+                    err = fdt_setprop(dtb->fdt, fixups_off, symbol_name, buf, list_len - match_len);
+                    free(buf);
+                    return err;
+                }
+            }
+        }
+    }
+
+    return -FDT_ERR_NOTFOUND;
+}
+
+int dtoverlay_stringlist_replace(const char *src, int src_len,
+                                 const char *src_prefix, int src_prefix_len,
+                                 const char *dst_prefix, int dst_prefix_len,
+                                 char *dst)
+{
+    /* With a NULL dst, only returns the new length */
+    char *dst_p = dst;
+    int replaced = 0;
+
+    while (src_len)
+    {
+        const char *p;
+        int copy_bytes;
+
+        p = memchr(src, '\0', src_len);
+        if (!p)
+            return -1; /* malformed strlist.. */
+
+        if (src_prefix_len < src_len && memcmp(src, src_prefix, src_prefix_len) == 0)
+        {
+            if (dst)
+                memcpy(dst_p, dst_prefix, dst_prefix_len);
+            src_len -= src_prefix_len;
+            src += src_prefix_len;
+            dst_p += dst_prefix_len;
+            replaced = 1;
+        }
+
+        copy_bytes = (p - src) + 1;
+        if (dst)
+            memcpy(dst_p, src, copy_bytes);
+        dst_p += copy_bytes;
+        src_len -= copy_bytes;
+        src = p + 1;
+    }
+
+    if (!replaced)
+        return -1;
+
+    return dst_p - dst;
+}
+
+void dtoverlay_set_intra_fragment_merged_callback(void (*callback)(DTBLOB_T *, int, int))
+{
+    intra_fragment_merged_callback = callback;
+}
+
+void dtoverlay_set_cell_changed_callback(void (*callback)(DTBLOB_T *, int, const char *, int, int))
+{
+    cell_changed_callback = callback;
 }
 
 /* Returns a pointer to the override data and (through data_len) its length.
@@ -1790,6 +1965,10 @@ int dtoverlay_override_one_target(int override_type,
         }
     }
 
+    if (!err && cell_changed_callback && cell_source && override_type == DTOVERRIDE_INTEGER && target_size == 4)
+        (*cell_changed_callback)(dtb, node_off, prop_name, target_off,
+                                 (int)(cell_source - override_data_start));
+
     return err;
 }
 
@@ -1844,6 +2023,7 @@ int dtoverlay_foreach_override_target(DTBLOB_T *dtb, const char *override_name,
     memcpy(data_buf, override_data, data_len);
     data = data_buf;
     data_end = data + data_len;
+    override_data_start = data_buf;
 
     while (err == 0)
     {
@@ -1869,7 +2049,6 @@ int dtoverlay_foreach_override_target(DTBLOB_T *dtb, const char *override_name,
             err = override_type;
             break;
         }
-        /* Pass DTOVERRIDE_END to the callback, in case it is interested */
 
         if (target_phandle != 0)
         {
@@ -1889,8 +2068,10 @@ int dtoverlay_foreach_override_target(DTBLOB_T *dtb, const char *override_name,
             prop_name[name_len] = '\0';
         }
 
+        /* Pass DTOVERRIDE_END to the callback, in case it is interested */
         err = callback(override_type, target_value, dtb, node_off, prop_name,
-                       target_phandle, target_off, target_size, callback_state);
+                       target_phandle, target_off, target_size,
+                       callback_state);
 
         if (override_type == DTOVERRIDE_END)
             break;
@@ -1929,6 +2110,8 @@ static int dtoverlay_extract_override(const char *override_name,
     const char *literal_value = NULL;
     char literal_type = '?';
     int type;
+
+    cell_source = NULL;
 
     data = *datap;
     len = data_end - data;
@@ -2104,6 +2287,7 @@ static int dtoverlay_extract_override(const char *override_name,
             {
                 /* Cell */
                 sprintf(override_value, "%d", dtoverlay_read_u32(data, 0));
+                cell_source = data;
                 *datap = data + 4;
             }
         }
@@ -2159,6 +2343,7 @@ static const char *dtoverlay_extract_immediate(const char *data, const char *dat
             return NULL;
         }
         val = dtoverlay_read_u32(data, 0);
+        cell_source = data;
         if (buf)
             snprintf(buf, buf_len, "%d", val);
         data += 4;

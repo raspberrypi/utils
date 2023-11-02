@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016 Raspberry Pi (Trading) Ltd.
+Copyright (c) 2016-2023 Raspberry Pi Ltd.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -106,6 +106,9 @@ const char *error_file = NULL;
 const char *platform_string;
 int platform_string_len;
 int dry_run = 0;
+
+char cell_source_loc[DTOVERLAY_MAX_PATH];
+int cell_source_loc_len;
 
 int main(int argc, const char **argv)
 {
@@ -352,11 +355,11 @@ int main(int argc, const char **argv)
     return ret;
 }
 
-int dtparam_callback(int override_type, const char *override_value,
-                     DTBLOB_T *dtb, int node_off,
-                     const char *prop_name, int target_phandle,
-                     int target_off, int target_size,
-                     void *callback_state)
+static int dtparam_callback(int override_type, const char *override_value,
+                            DTBLOB_T *dtb, int node_off,
+                            const char *prop_name, int target_phandle,
+                            int target_off, int target_size,
+                            void *callback_state)
 {
     STRING_VEC_T *used_props = callback_state;
     char prop_id[80];
@@ -382,9 +385,9 @@ int dtparam_callback(int override_type, const char *override_value,
 }
 
 // Returns 0 on success, -ve for fatal errors and +ve for non-fatal errors
-int dtparam_apply(DTBLOB_T *dtb, const char *override_name,
-                  const char *override_data, int data_len,
-                  const char *override_value, STRING_VEC_T *used_props)
+static int dtparam_apply(DTBLOB_T *dtb, const char *override_name,
+                         const char *override_data, int data_len,
+                         const char *override_value, STRING_VEC_T *used_props)
 {
     void *data;
     int err;
@@ -408,6 +411,102 @@ int dtparam_apply(DTBLOB_T *dtb, const char *override_name,
     }
 
     return err;
+}
+
+static void intra_fragment_merged_callback(DTBLOB_T *dtb, int fragment_off,
+                                           int target_off)
+{
+    // look for all fixups that refer to the indicated fragment, and rebase them
+    // onto the target
+    char fragment_path[DTOVERLAY_MAX_PATH];
+    char target_path[DTOVERLAY_MAX_PATH];
+    int fragment_path_len;
+    int target_path_len;
+    int fixups_off;
+    int fixup_off;
+
+    fixups_off = fdt_path_offset(dtb->fdt, "/__fixups__");
+    if (fixups_off < 0)
+        return;
+
+    fdt_get_path(dtb->fdt, fragment_off, fragment_path, sizeof(fragment_path));
+    fragment_path_len = strlen(fragment_path);
+    fragment_path[fragment_path_len++] = ':';
+    fragment_path[fragment_path_len] = '\0';
+
+    fdt_get_path(dtb->fdt, target_off, target_path, sizeof(target_path));
+    target_path_len = strlen(target_path);
+    target_path[target_path_len++] = ':';
+    target_path[target_path_len] = '\0';
+
+    for (fixup_off = fdt_first_property_offset(dtb->fdt, fixups_off);
+         fixup_off >= 0;
+         fixup_off = fdt_next_property_offset(dtb->fdt, fixup_off))
+    {
+        const char *fixups_stringlist;
+        const char *symbol_name;
+        char *new_list = NULL;
+        int list_len;
+        int new_len;
+        int err;
+        int i;
+
+        fixups_stringlist = fdt_getprop_by_offset(dtb->fdt, fixup_off,
+                                                  &symbol_name, &list_len);
+        for (i = 0; i < 2; i++)
+        {
+            new_len = dtoverlay_stringlist_replace(fixups_stringlist, list_len,
+                                                   fragment_path, fragment_path_len,
+                                                   target_path, target_path_len,
+                                                   new_list);
+            if (new_len < 0)
+                break;
+            if (!new_list)
+                new_list = malloc(new_len);
+        }
+
+        if (!new_list)
+            continue;
+
+        err = fdt_setprop(dtb->fdt, fixups_off, symbol_name, new_list, new_len);
+        free(new_list);
+        if (err < 0)
+            break;
+    }
+}
+
+static void cell_changed_callback(DTBLOB_T *dtb, int node_off, const char *prop_name,
+                                  int target_off, int cell_data_offset)
+{
+    char cell_target_loc[DTOVERLAY_MAX_PATH];
+    const char *symbol;
+    int path_len;
+
+    sprintf(cell_source_loc + cell_source_loc_len, "%d", cell_data_offset); // XXX
+
+    fdt_get_path(dtb->fdt, node_off, cell_target_loc,
+                 sizeof(cell_target_loc));
+    path_len = strlen(cell_target_loc);
+    sprintf(cell_target_loc + path_len, ":%s:%d", prop_name, target_off); // XXX
+
+    dtoverlay_delete_fixup(dtb, cell_target_loc);
+    symbol = dtoverlay_find_fixup(dtb, cell_source_loc);
+    if (symbol)
+        dtoverlay_add_fixup(dtb, symbol, cell_target_loc);
+}
+
+// Returns 0 on success, -ve for fatal errors and +ve for non-fatal errors
+static int apply_override(DTBLOB_T *dtb, const char *override_name,
+                          const char *override_data, int data_len,
+                          const char *override_value)
+{
+    cell_source_loc_len = sprintf(cell_source_loc, "/__overrides__:%s:", override_name);
+
+    return dtoverlay_foreach_override_target(dtb, override_name,
+                                             override_data, data_len,
+                                             override_value,
+                                             dtoverlay_override_one_target,
+                                             NULL);
 }
 
 static int apply_parameter(DTBLOB_T *overlay_dtb, const char *arg, int is_dtparam,
@@ -443,9 +542,9 @@ static int apply_parameter(DTBLOB_T *overlay_dtb, const char *arg, int is_dtpara
                             override, override_len,
                             param_val, used_props);
     else
-        err = dtoverlay_apply_override(overlay_dtb, param,
-                                       override, override_len,
-                                       param_val);
+        err = apply_override(overlay_dtb, param,
+                             override, override_len,
+                             param_val);
     if (err != 0)
         return error("Failed to set %s=%s", param, param_val);
 
@@ -527,6 +626,8 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
         string_vec_init(&used_props);
     }
 
+    dtoverlay_set_cell_changed_callback(&cell_changed_callback);
+
     /* Apply any parameters that came from the overlay map */
     while (overrides && *overrides)
     {
@@ -551,10 +652,14 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
             return err;
     }
 
+    dtoverlay_set_cell_changed_callback(NULL);
+
     /* Apply any intra-overlay fragments, filtering the symbols */
+    dtoverlay_set_intra_fragment_merged_callback(intra_fragment_merged_callback);
     err = dtoverlay_merge_overlay(NULL, overlay_dtb);
     if (err != 0)
         return error("Failed to apply intra-overlay fragments");
+    dtoverlay_set_intra_fragment_merged_callback(NULL);
 
     if (is_dtparam)
     {

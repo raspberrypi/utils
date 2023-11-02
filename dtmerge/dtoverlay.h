@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016 Raspberry Pi (Trading) Ltd.
+Copyright (c) 2016-2023 Raspberry Pi Ltd.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -134,6 +134,17 @@ int dtoverlay_merge_params(DTBLOB_T *dtb, const DTOVERLAY_PARAM_T *params,
                            unsigned int num_params);
 
 int dtoverlay_filter_symbols(DTBLOB_T *dtb);
+
+const char *dtoverlay_find_fixup(DTBLOB_T *dtb, const char *fixup_loc);
+int dtoverlay_add_fixup(DTBLOB_T *dtb, const char *symbol, const char *fixup_loc);
+int dtoverlay_delete_fixup(DTBLOB_T *dtb, const char *fixup_loc);
+
+int dtoverlay_stringlist_replace(const char *src, int src_len,
+                                 const char *src_prefix, int src_prefix_len,
+                                 const char *dst_prefix, int dst_prefix_len,
+                                 char *dst);
+void dtoverlay_set_intra_fragment_merged_callback(void (*callback)(DTBLOB_T *, int, int));
+void dtoverlay_set_cell_changed_callback(void (*callback)(DTBLOB_T *, int, const char *, int, int));
 
 const char *dtoverlay_find_override(DTBLOB_T *dtb, const char *override_name,
                                     int *data_len);

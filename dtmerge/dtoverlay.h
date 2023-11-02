@@ -49,43 +49,43 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 typedef enum
 {
-   DTOVERLAY_ERROR,
-   DTOVERLAY_DEBUG,
-   DTOVERLAY_WARN, // Append to preserve backwards compatibility
+    DTOVERLAY_ERROR,
+    DTOVERLAY_DEBUG,
+    DTOVERLAY_WARN, // Append to preserve backwards compatibility
 } dtoverlay_logging_type_t;
 
 typedef struct dtoverlay_struct
 {
-   const char *param;
-   int len;
-   const char *b;
+    const char *param;
+    int len;
+    const char *b;
 } DTOVERLAY_PARAM_T;
 
 typedef struct dtblob_struct
 {
-   void *fdt;
-   char fdt_is_malloced;
-   char trailer_is_malloced;
-   char fixups_applied;
-   uint32_t min_phandle;
-   uint32_t max_phandle;
-   void *trailer;
-   int trailer_len;
+    void *fdt;
+    char fdt_is_malloced;
+    char trailer_is_malloced;
+    char fixups_applied;
+    uint32_t min_phandle;
+    uint32_t max_phandle;
+    void *trailer;
+    int trailer_len;
 } DTBLOB_T;
 
 typedef struct pin_iter_struct
 {
-   DTBLOB_T *dtb;
-   const void *pinctrl;
-   int pinctrl_len;
-   int pinctrl_off;
-   const void *pins;
-   const void *funcs;
-   const void *pulls;
-   int pins_len;
-   int pin_off;
-   int funcs_len;
-   int pulls_len;
+    DTBLOB_T *dtb;
+    const void *pinctrl;
+    int pinctrl_len;
+    int pinctrl_off;
+    const void *pins;
+    const void *funcs;
+    const void *pulls;
+    int pins_len;
+    int pin_off;
+    int funcs_len;
+    int pulls_len;
 } PIN_ITER_T;
 
 typedef void DTOVERLAY_LOGGING_FUNC(dtoverlay_logging_type_t type,

@@ -676,7 +676,8 @@ static int dtoverlay_phandle_relocate(DTBLOB_T *dtb, int node_off,
 
 // Returns 0 on success, or an FDT error code
 static int dtoverlay_apply_fixups(DTBLOB_T *dtb, const char *fixups_stringlist,
-                                  uint32_t phandle, fixup_type_t type)
+                                  int fixups_len, uint32_t phandle,
+                                  fixup_type_t type)
 {
     // The fixups arrive as a sequence of NUL-terminated strings, of the form:
     //   "path:property:offset"
@@ -687,8 +688,9 @@ static int dtoverlay_apply_fixups(DTBLOB_T *dtb, const char *fixups_stringlist,
     // 4) the code is simpler as a result.
 
     const char *fixup = fixups_stringlist;
+    const char *end  = fixup + fixups_len;
 
-    while  (fixup[0])
+    while  (fixup < end && fixup[0])
     {
         const char *prop_name, *offset_str;
         char *offset_end;
@@ -853,7 +855,7 @@ static int dtoverlay_resolve_phandles(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
         if (fixups_stringlist)
         {
             // Relocate the overlay phandle references
-            err = dtoverlay_apply_fixups(overlay_dtb, fixups_stringlist,
+            err = dtoverlay_apply_fixups(overlay_dtb, fixups_stringlist, err,
                                          base_dtb->max_phandle, FIXUP_RELATIVE);
         }
         else
@@ -906,7 +908,7 @@ static int dtoverlay_resolve_fixups(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
         {
             const char *fixups_stringlist, *symbol_name, *target_path;
             const char *ref_type;
-            int target_off;
+            int target_off, fixups_len;
             uint32_t target_phandle;
 
             // The property name identifies a symbol (or alias) in the base.
@@ -919,6 +921,8 @@ static int dtoverlay_resolve_fixups(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
                 dtoverlay_error("__fixups__ are borked");
                 break;
             }
+
+            fixups_len = err;
 
             // 1) Find the target node.
             if (symbol_name[0] == '/')
@@ -973,10 +977,13 @@ static int dtoverlay_resolve_fixups(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb)
 
             // Now apply the valid target_phandle to the items in the fixup string
 
-            err = dtoverlay_apply_fixups(overlay_dtb, fixups_stringlist,
+            err = dtoverlay_apply_fixups(overlay_dtb, fixups_stringlist, fixups_len,
                                          target_phandle, FIXUP_ABSOLUTE);
             if (err)
+            {
+                dtoverlay_error("failed to apply fixups");
                 break;
+            }
         }
     }
 
@@ -2343,9 +2350,11 @@ static const char *dtoverlay_extract_immediate(const char *data, const char *dat
             return NULL;
         }
         val = dtoverlay_read_u32(data, 0);
-        cell_source = data;
         if (buf)
+        {
+            cell_source = data;
             snprintf(buf, buf_len, "%d", val);
+        }
         data += 4;
     }
     else if (data[0] == '\'')

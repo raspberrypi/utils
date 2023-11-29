@@ -988,7 +988,8 @@ sub ordercheck
 	# Try to apply fragments that target other fragments within the overlay
 	foreach my $fragment (get_fragments($ov))
 	{
-		my $overlay = get_child($fragment, '__overlay__');
+		my $overlay = get_child($fragment, '__overlay__') ||
+		    get_child($fragment, '__dormant__');
 		next if (!$overlay);
 		my $target_node;
 		my $target = get_prop($fragment, 'target');

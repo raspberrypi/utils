@@ -1365,11 +1365,10 @@ sub read_tokens
 		elsif ($line =~ /^\s*#define\s+(\w+)(?:\s+([^\r\n]+))?/)
 		{
 			my $symbol = $1;
-			my $val = $2;
+			my $val = $2 || '';
 
 			$val =~ s/\/\/.*//;
 			$val =~ s/\s+$//;
-			$val = '' if (!defined($val));
 			$defines->{$symbol} = $val;
 			next;
 		}

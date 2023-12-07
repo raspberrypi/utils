@@ -113,9 +113,9 @@ static unsigned gencmd(int file_desc, const char *command, char *result, int res
 
 static void show_usage()
 {
-   puts( "Usage: vcgencmd [-t] command" );
+   puts( "Usage: vcgencmd command [ params ]" );
    puts( "Send a command to the VideoCore and print the result.\n" );
-   puts( "  -h, --help  Show this information\n" );
+   puts( "Without any argument this information is shown.\n" );
    puts( "Use the command 'vcgencmd commands' to get a list of available commands\n" );
    puts( "Exit status:" );
    puts( "   0    command completed successfully" );

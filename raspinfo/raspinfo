@@ -133,6 +133,20 @@ display_info() {
    fi
 }
 
+audio_info() {
+   aplay -l
+   echo
+   aplay -L
+   echo
+   systemctl --user status pipewire.socket pipewire.service pulseaudio.service pulseaudio.socket
+   echo
+   if command -v pactl > /dev/null; then
+      pactl info
+   else
+      echo pactl not installed
+   fi
+}
+
 OUT=raspinfo.txt
 
 rm -f $OUT
@@ -206,6 +220,13 @@ echo "-------------------"
 echo
 
 display_info
+
+echo
+echo "Audio Information"
+echo "-------------------"
+echo
+
+audio_info
 
 echo
 echo "config.txt"

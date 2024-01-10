@@ -6,6 +6,7 @@
 # IP4 d.d.d.d decimal	    "s/\([0-9]\{1,3\}\.\)\{3,3\}[0-9]\{1,3\}/x.x.x.x/g"
 # mac address	            "s/\([0-9a-fA-F]\{2,2\}\:\)\{5,5\}[0-9a-fA-F]\{2,2\}/m.m.m.m/g"
 
+TERM_OPT="OFF"
 
 display_info_drm() {
    # If running X then can use xrandr, otherwise
@@ -147,11 +148,12 @@ audio_info() {
    fi
 }
 
-OUT=raspinfo.txt
-
+OUT=raspinfo-$(date +%4Y%m%d).txt
 rm -f $OUT
-
-exec > >(tee -ia $OUT)
+case $TERM_OPT in
+   (OFF) exec >> "$OUT";;
+   (*)   exec > >(tee -ia -- "$OUT")
+esac
 
 echo "System Information"
 echo "------------------"

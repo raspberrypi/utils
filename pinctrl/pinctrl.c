@@ -86,7 +86,7 @@ static void usage()
     printf("Note that omitting [GPIO] from \"%s get\" prints all GPIOs.\n", name);
     printf("If the -p option is given, GPIO numbers are replaced by pin numbers on the\n");
     printf("40-way header. If the -v option is given, the output is more verbose.\n");
-    printf("%s funcs will dump all the possible GPIO alt funcions in CSV format\n", name);
+    printf("%s funcs will dump all the possible GPIO alt functions in CSV format\n", name);
     printf("or if [GPIO] is specified the alternate funcs just for that specific GPIO.\n");
     printf("The -c option allows the alt functions (and only the alt function) for a named\n");
     printf("chip to be displayed, even if that chip is not present in the current system.\n");

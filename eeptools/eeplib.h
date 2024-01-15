@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <endian.h>
 
 // minimal sizes of data structures
 #define HEADER_SIZE 12
@@ -23,7 +24,7 @@
 #define CRC16 0x8005
 
 // Signature is "R-Pi" in ASCII. It is required to reversed (little endian) on disk.
-#define HEADER_SIGN be32toh((((char)'R' << 24) | ((char)'-' << 16) | ((char)'P' << 8) | ((char)'i')))
+#define HEADER_SIGN (uint32_t)be32toh((((char)'R' << 24) | ((char)'-' << 16) | ((char)'P' << 8) | ((char)'i')))
 
 #define count_of(x) ((sizeof(x) / sizeof(x[0])))
 #define max(x, y) ((x) > (y) ? (x) : (y))

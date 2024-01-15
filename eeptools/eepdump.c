@@ -3,7 +3,6 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdbool.h>
-#include <endian.h>
 
 #include "eeplib.h"
 

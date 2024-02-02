@@ -9,8 +9,9 @@ my $TMPDIR = tempdir( CLEANUP => 1);
 my $MERGED_DTB = "$TMPDIR/merged.dtb";
 
 my @base_files = (
+    "bcm2712-rpi-5-b",
     "bcm2711-rpi-4-b",
-    "bcm2711-rpi-400",
+#    "bcm2711-rpi-400",
     "bcm2711-rpi-cm4",
     "bcm2711-rpi-cm4s",
     "bcm2708-rpi-b",
@@ -25,7 +26,12 @@ my @base_files = (
     "bcm2710-rpi-3-b-plus",
     "bcm2710-rpi-cm3",
     "bcm2710-rpi-zero-2",
-    "bcm2712-rpi-5-b",
+);
+
+my %platform_reps = (
+	'bcm2835' => 'bcm2710-rpi-3-b',
+	'bcm2711' => 'bcm2711-rpi-4-b',
+	'bcm2712' => 'bcm2712-rpi-5-b',
 );
 
 $ENV{'LD_LIBRARY_PATH'} = "$ENV{'HOME'}/lib";
@@ -36,7 +42,7 @@ my %overlay_checkers = (
     #   '^(addr|lm75addr|int_pin|i2c\d|i2c_csi_dsi|no_timeout)$'
     'i2c-rtc' => [ \&container_checker, undef ],
     'i2c-fan' => [ \&container_checker, undef ],
-    "i2c-sensor" => [ \&container_checker, undef ],
+    'i2c-sensor' => [ \&container_checker, undef ],
     );
 
 my $word_pattern = '[0-9a-zA-Z0-9][-_a-zA-Z0-9]*';
@@ -231,6 +237,21 @@ foreach my $overlay (sort(keys(%$source)))
 	error("  Error ^ in overlay $overlay\n");
     }
     dtc_cpp("${overlay}-overlay.dts", "$TMPDIR/$overlay.dtbo");
+
+    my $overlay_props = $source->{$overlay}[0];
+    my $base;
+    while (my ($plat, $dts) = each(%platform_reps))
+    {
+	if ($overlay_props->{$plat})
+	{
+	    $base = $dts;
+	    last;
+	}
+    }
+    if ($base && (system($DTMERGE, "$TMPDIR/$base.dtb", $MERGED_DTB, "$TMPDIR/$overlay.dtbo") >> 8))
+    {
+	error("  Error ^ in overlay $overlay\n");
+    }
 }
 
 if ($try_all)
@@ -701,8 +722,7 @@ sub get_params
 		{
 		    error("Invalid overlay compatible string '$comp' in '$file'");
 		}
-		$props->{'bcm2711'} = 1 if ($comp eq 'brcm,bcm2711');
-		$props->{'bcm2712'} = 1 if ($comp eq 'brcm,bcm2712');
+		$props->{$1} = 1;
 	    }
 	}
 	elsif ($line =~ /^\s+(?:__symbols__|__fixups__|__local_fixups__)/)

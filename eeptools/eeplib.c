@@ -153,7 +153,7 @@ static void *eepio_write_buf_space(int len)
 			eepio_fatal_error("Out of memory");
 	}
 
-	space = eepio_write_buf + eepio_write_buf_pos;
+	space = (void *)((uint8_t *)eepio_write_buf + eepio_write_buf_pos);
 	eepio_write_buf_pos += len;
 	return space;
 }

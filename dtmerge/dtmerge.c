@@ -54,7 +54,7 @@ int main(int argc, char **argv)
     char *p;
     DTBLOB_T *base_dtb;
     DTBLOB_T *overlay_dtb;
-    int err;
+    int err = 0;
     int argn = 1;
     int max_dtb_size = 100000;
     int compatible_len;

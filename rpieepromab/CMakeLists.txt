@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10...3.27)
 include(GNUInstallDirs)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror")
+add_compile_options(-Wall -Wextra $<$<CONFIG:Debug>:-Werror>)
 
 # Set project name and version
 project(rpieepromab VERSION 0.2.2)

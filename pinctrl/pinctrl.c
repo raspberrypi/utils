@@ -73,7 +73,7 @@ static void usage()
     printf("Use:\n");
     printf("  %s [-p] [-v] get [GPIO]\n", name);
     printf("OR\n");
-    printf("  %s [-p] [-v] set <GPIO> [options]\n", name);
+    printf("  %s [-p] [-v] [-e] set <GPIO> [options]\n", name);
     printf("OR\n");
     printf("  %s [-p] [-v] poll [GPIO]\n", name);
     printf("OR\n");
@@ -86,7 +86,8 @@ static void usage()
     printf("\n");
     printf("Note that omitting [GPIO] from \"%s get\" prints all GPIOs.\n", name);
     printf("If the -p option is given, GPIO numbers are replaced by pin numbers on the\n");
-    printf("40-way header. If the -v option is given, the output is more verbose.\n");
+    printf("40-way header. If the -v option is given, the output is more verbose. Including\n");
+    printf("the -e option in a \"set\" causes pinctrl to echo back the new pin states.\n");
     printf("%s funcs will dump all the possible GPIO alt functions in CSV format\n", name);
     printf("or if [GPIO] is specified the alternate funcs just for that specific GPIO.\n");
     printf("The -c option allows the alt functions (and only the alt function) for a named\n");
@@ -107,7 +108,7 @@ static void usage()
     printf("  %s get 10           Prints state of GPIO10\n", name);
     printf("  %s get 10,11        Prints state of GPIO10 and GPIO11\n", name);
     printf("  %s set 10 a2        Set GPIO10 to fsel 2 function (nand_wen_clk)\n", name);
-    printf("  %s set 10 pu        Enable GPIO10 ~50k in-pad pull up\n", name);
+    printf("  %s -e set 10 pu     Enable GPIO10 ~50k in-pad pull up, echoing the result\n", name);
     printf("  %s set 10 pd        Enable GPIO10 ~50k in-pad pull down\n", name);
     printf("  %s set 10 op        Set GPIO10 to be an output\n", name);
     printf("  %s set 10 dl        Set GPIO10 to output low/zero (must already be set as an output)\n", name);
@@ -289,6 +290,7 @@ int main(int argc, char *argv[])
     int get = 0;
     int poll = 0;
     int funcs = 0;
+    int echo = 0;
     int pull = PULL_MAX;
     int infer_cmd = 0;
     int fsparam = GPIO_FSEL_MAX;
@@ -313,6 +315,10 @@ int main(int argc, char *argv[])
         else if (strcmp(arg, "-p") == 0)
         {
             pin_mode = 1;
+        }
+        else if (strcmp(arg, "-e") == 0)
+        {
+            echo = 1;
         }
         else if (strcmp(arg, "-v") == 0)
         {
@@ -626,6 +632,17 @@ int main(int argc, char *argv[])
             do_gpio_poll_add(pin);
         if (funcs)
             print_gpio_alts_info(pin);
+    }
+
+    if (set && echo)
+    {
+        for (pin = start_pin; pin < end_pin + 1; pin++)
+        {
+            if (!(gpiomask[pin / 32] & (1 << (pin % 32))))
+                continue;
+
+            do_gpio_get(pin);
+        }
     }
 
     if (poll)

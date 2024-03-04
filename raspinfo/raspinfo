@@ -87,7 +87,7 @@ display_info_drm() {
 
 display_info_legacy() {
    # Legacy mode
-   echo "Running Legacy framebuffer"
+   echo "Running Legacy framebuffer (unsupported)"
    echo
 
    for card in `seq 0 9`;
@@ -99,6 +99,11 @@ display_info_legacy() {
          fbset -s -fb $F
       fi
    done
+
+   if ! command -v tvservice > /dev/null; then
+	echo "Please install Legacy userland package (tvservice)"
+	return 1
+   fi
 
    disps=`tvservice -l | awk '/Display Number/{print substr($3,1,1)}'`
 

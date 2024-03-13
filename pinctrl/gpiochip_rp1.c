@@ -194,13 +194,16 @@ static uint32_t rp1_gpio_sys_rio_sync_in_read(volatile uint32_t *base, int bank,
                            RP1_GPIO_SYS_RIO_REG_SYNC_IN_OFFSET);
 }
 
-
-static void rp1_gpio_sys_rio_out_write(volatile uint32_t *base, int bank,
-                                       int offset, uint32_t value)
+static void rp1_gpio_sys_rio_out_set(volatile uint32_t *base, int bank, int offset)
 {
-    UNUSED(offset);
     rp1_gpio_write32(base, gpio_state.sys_rio[bank],
-                     RP1_GPIO_SYS_RIO_REG_OUT_OFFSET, value);
+                     RP1_GPIO_SYS_RIO_REG_OUT_OFFSET + RP1_SET_OFFSET, 1U << offset);
+}
+
+static void rp1_gpio_sys_rio_out_clr(volatile uint32_t *base, int bank, int offset)
+{
+    rp1_gpio_write32(base, gpio_state.sys_rio[bank],
+                     RP1_GPIO_SYS_RIO_REG_OUT_OFFSET + RP1_CLR_OFFSET, 1U << offset);
 }
 
 static uint32_t rp1_gpio_sys_rio_oe_read(volatile uint32_t *base, int bank)
@@ -355,16 +358,13 @@ static int rp1_gpio_get_level(void *priv, unsigned gpio)
 static void rp1_gpio_set_drive(void *priv, unsigned gpio, GPIO_DRIVE_T drv)
 {
     volatile uint32_t *base = priv;
-    uint32_t reg;
     int bank, offset;
 
     rp1_gpio_get_bank(gpio, &bank, &offset);
-    reg = rp1_gpio_sys_rio_out_read(base, bank, offset);
     if (drv == DRIVE_HIGH)
-        reg |= (1U << offset);
+        rp1_gpio_sys_rio_out_set(base, bank, offset);
     else if (drv == DRIVE_LOW)
-        reg &= ~(1U << offset);
-    rp1_gpio_sys_rio_out_write(base, bank, offset, reg);
+        rp1_gpio_sys_rio_out_clr(base, bank, offset);
 }
 
 static void rp1_gpio_set_pull(void *priv, unsigned gpio, GPIO_PULL_T pull)

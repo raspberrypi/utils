@@ -54,7 +54,7 @@ int main(int argc, char **argv)
     char *p;
     DTBLOB_T *base_dtb;
     DTBLOB_T *overlay_dtb;
-    int err;
+    int err = 0;
     int argn = 1;
     int max_dtb_size = 100000;
     int compatible_len;
@@ -109,12 +109,14 @@ int main(int argc, char **argv)
 					"compatible", &compatible_len);
     dtoverlay_init_map(overlay_dir, compatible, compatible_len);
 
-    err = dtoverlay_set_synonym(base_dtb, "i2c", "i2c0");
-    err = dtoverlay_set_synonym(base_dtb, "i2c_arm", "i2c0");
-    err = dtoverlay_set_synonym(base_dtb, "i2c_vc", "i2c1");
-    err = dtoverlay_set_synonym(base_dtb, "i2c_baudrate", "i2c0_baudrate");
-    err = dtoverlay_set_synonym(base_dtb, "i2c_arm_baudrate", "i2c0_baudrate");
-    err = dtoverlay_set_synonym(base_dtb, "i2c_vc_baudrate", "i2c1_baudrate");
+    if (!dtoverlay_get_alias(base_dtb, "i2c"))
+    {
+	err = dtoverlay_set_synonym(base_dtb, "i2c_arm", "i2c0");
+	err = dtoverlay_set_synonym(base_dtb, "i2c_vc", "i2c1");
+	err = dtoverlay_set_synonym(base_dtb, "i2c_baudrate", "i2c0_baudrate");
+	err = dtoverlay_set_synonym(base_dtb, "i2c_arm_baudrate", "i2c0_baudrate");
+	err = dtoverlay_set_synonym(base_dtb, "i2c_vc_baudrate", "i2c1_baudrate");
+    };
 
     if (strcmp(overlay_file, "-") == 0)
     {

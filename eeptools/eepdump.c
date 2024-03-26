@@ -3,7 +3,6 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdbool.h>
-#include <endian.h>
 
 #include "eeplib.h"
 
@@ -134,7 +133,7 @@ static int read_bin(const char *in, const char *outf)
 	for (i = 0; i < numatoms && !eepio_got_error(); i++)
 	{
 		unsigned int gpio_count;
-		enum atom_type_t type;
+		enum atom_type_t type = ATOM_INVALID_TYPE;
 		bool bank1 = false;
 		uint32_t dlen;
 

@@ -614,7 +614,7 @@ static int read_text(const char *in)
 	if (has_gpio_bank1 && (!bank1_gpio_drive_set || !bank1_gpio_slew_set || !bank1_gpio_hysteresis_set))
 		printf("Warning: required fields missing in GPIO map of bank 1, using default values\n");
 
-	if (dt_blob.data && !isalnum(dt_blob.data[0]))
+	if (hat_format != EEP_VERSION_HATV1 && dt_blob.data && !isalnum(dt_blob.data[0]))
 		fatal_error("Only embed the name of the overlay");
 
 	printf("Done reading\n");

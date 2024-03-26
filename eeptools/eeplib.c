@@ -153,7 +153,7 @@ static void *eepio_write_buf_space(int len)
 			eepio_fatal_error("Out of memory");
 	}
 
-	space = eepio_write_buf + eepio_write_buf_pos;
+	space = (void *)((uint8_t *)eepio_write_buf + eepio_write_buf_pos);
 	eepio_write_buf_pos += len;
 	return space;
 }
@@ -234,11 +234,11 @@ bool eepio_end(void)
 			return eepio_error("ftell failed");
 		if (pos != pos_end)
 			eepio_warning("Dump finished before EOF");
-		if (pos != eep_header.eeplen)
+		if (pos != (long)eep_header.eeplen)
 			eepio_warning("Dump finished before length specified in header");
-		if (pos_end != eep_header.eeplen)
+		if (pos_end != (long)eep_header.eeplen)
 			eepio_warning("EOF does not match length specified in header");
-		if (pos_end != eep_header.eeplen)
+		if (pos_end != (long)eep_header.eeplen)
 			eepio_warning("%i bytes of file not processed");
 	}
 	return !eepio_got_error();
@@ -284,7 +284,7 @@ void eepio_atom_end(void)
 	if (eepio_dir == EEPIO_READ)
 	{
 		long pos = ftell(eepio_fp);
-		if (pos - eepio_atom_data_start != eep_atom_header.dlen)
+		if (pos - eepio_atom_data_start != (long)eep_atom_header.dlen)
 			eepio_warning("atom data length mismatch");
 		if (crc_actual != eep_atom_crc)
 			eepio_warning("atom CRC16 mismatch. Calculated CRC16=0x%02x", crc_actual);

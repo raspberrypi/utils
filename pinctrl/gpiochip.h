@@ -4,7 +4,7 @@
 #include "gpiolib.h"
 
 #define DECLARE_GPIO_CHIP(name, compatible, iface, size, data) \
-    GPIO_CHIP_T name ## _chip __attribute__ ((section ("gpiochips"))) = \
+    GPIO_CHIP_T name ## _chip __attribute__ ((section ("gpiochips"))) __attribute__ ((used)) = \
     { #name, compatible, iface, size, data }
 
 typedef struct GPIO_CHIP_INTERFACE_ GPIO_CHIP_INTERFACE_T;

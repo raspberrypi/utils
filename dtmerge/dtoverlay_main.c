@@ -640,6 +640,8 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
         free(override);
         if (err)
             return err;
+        if (!overrides[override_len])
+            break;
         overrides += override_len + 1;
     }
 

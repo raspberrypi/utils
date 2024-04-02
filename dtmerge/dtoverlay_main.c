@@ -420,14 +420,16 @@ static void intra_fragment_merged_callback(DTBLOB_T *dtb, int fragment_off,
     // onto the target
     char fragment_path[DTOVERLAY_MAX_PATH];
     char target_path[DTOVERLAY_MAX_PATH];
+    char *src_path;
+    char *dst_path;
+    DTBLOB_T clone_dtb;
+    DTBLOB_T *src_dtb;
     int fragment_path_len;
     int target_path_len;
     int fixups_off;
     int fixup_off;
-
-    fixups_off = fdt_path_offset(dtb->fdt, "/__fixups__");
-    if (fixups_off < 0)
-        return;
+    int src_off;
+    int dst_off;
 
     fdt_get_path(dtb->fdt, fragment_off, fragment_path, sizeof(fragment_path));
     fragment_path_len = strlen(fragment_path);
@@ -438,6 +440,10 @@ static void intra_fragment_merged_callback(DTBLOB_T *dtb, int fragment_off,
     target_path_len = strlen(target_path);
     target_path[target_path_len++] = ':';
     target_path[target_path_len] = '\0';
+
+    fixups_off = fdt_path_offset(dtb->fdt, "/__fixups__");
+    if (fixups_off < 0)
+        goto try_local_fixups;
 
     for (fixup_off = fdt_first_property_offset(dtb->fdt, fixups_off);
          fixup_off >= 0;
@@ -473,6 +479,38 @@ static void intra_fragment_merged_callback(DTBLOB_T *dtb, int fragment_off,
         if (err < 0)
             break;
     }
+
+try_local_fixups:
+    // Strip off the trailing ':'s
+    fragment_path[--fragment_path_len] = '\0';
+    target_path[--target_path_len] = '\0';
+    src_path = sprintf_dup("/__local_fixups__%s", fragment_path);
+    dst_path = sprintf_dup("/__local_fixups__%s", target_path);
+    src_dtb = dtb;
+    src_off = fdt_path_offset(src_dtb->fdt, src_path);
+    if (src_off < 0) // No phandles in the fragment payload
+        return;
+
+    dst_off = dtoverlay_create_node(dtb, dst_path, 0);
+    if (dst_off < 0)
+        fatal_error("failed to copy local fixups");
+    if (dst_off < src_off)
+    {
+        // Make a copy of the src, so that it doesn't move
+        int overlay_size = fdt_totalsize(dtb->fdt);
+        void *overlay_copy = malloc(overlay_size);
+        if (!overlay_copy)
+            fatal_error("out of memory");
+        memcpy(overlay_copy, dtb->fdt, overlay_size);
+        memcpy(&clone_dtb, dtb, sizeof(DTBLOB_T));
+        clone_dtb.fdt = overlay_copy;
+        src_dtb = &clone_dtb;
+        src_off = fdt_path_offset(src_dtb->fdt, src_path);
+    }
+    if (dtoverlay_merge_fragment(dtb, dst_off, src_dtb, src_off, 1))
+        fatal_error("failed to copy local fixups");
+    if (src_dtb != dtb)
+        free(src_dtb->fdt);
 }
 
 static void cell_changed_callback(DTBLOB_T *dtb, int node_off, const char *prop_name,

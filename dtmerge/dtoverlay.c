@@ -559,7 +559,7 @@ int dtoverlay_create_prop_fragment(DTBLOB_T *dtb, int idx, int target_phandle,
 }
 
 // Returns 0 on success, otherwise <0 error code
-static int dtoverlay_merge_fragment(DTBLOB_T *base_dtb, int target_off,
+int dtoverlay_merge_fragment(DTBLOB_T *base_dtb, int target_off,
                                     const DTBLOB_T *overlay_dtb,
                                     int overlay_off, int depth)
 {

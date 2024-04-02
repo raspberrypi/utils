@@ -126,6 +126,10 @@ int dtoverlay_create_prop_fragment(DTBLOB_T *dtb, int idx, int target_phandle,
                                    const char *prop_name, const void *prop_data,
                                    int prop_len);
 
+int dtoverlay_merge_fragment(DTBLOB_T *base_dtb, int target_off,
+                                    const DTBLOB_T *overlay_dtb,
+                                    int overlay_off, int depth);
+
 int dtoverlay_fixup_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb);
 
 int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb);

@@ -75,7 +75,7 @@ static void usage()
     printf("OR\n");
     printf("  %s [-p] [-v] [-e] set <GPIO> [options]\n", name);
     printf("OR\n");
-    printf("  %s [-p] [-v] poll [GPIO]\n", name);
+    printf("  %s [-p] [-v] poll <GPIO>\n", name);
     printf("OR\n");
     printf("  %s [-p] [-v] funcs [GPIO]\n", name);
     printf("OR\n");

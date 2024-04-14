@@ -96,7 +96,7 @@ static void usage()
     printf("Valid [options] for %s set are:\n", name);
     printf("  ip      set GPIO as input\n");
     printf("  op      set GPIO as output\n");
-    printf("  a1-a7   set GPIO to fsel in the range 1-7\n");
+    printf("  a0-a8   set GPIO to alt function in the range 0 to 8 (range varies by model)\n");
     printf("  no      set GPIO to no function (NONE)\n");
     printf("  pu      set GPIO in-pad pull up\n");
     printf("  pd      set GPIO pin-pad pull down\n");

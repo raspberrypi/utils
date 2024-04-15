@@ -2293,7 +2293,7 @@ static int dtoverlay_extract_override(const char *override_name,
             else
             {
                 /* Cell */
-                sprintf(override_value, "%d", dtoverlay_read_u32(data, 0));
+                sprintf(override_value, "%u", dtoverlay_read_u32(data, 0));
                 cell_source = data;
                 *datap = data + 4;
             }

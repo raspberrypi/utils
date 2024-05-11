@@ -79,6 +79,8 @@ static void usage()
     printf("OR\n");
     printf("  %s [-p] [-v] funcs [GPIO]\n", name);
     printf("OR\n");
+    printf("  %s [-p] [-v] lev [GPIO]\n", name);
+    printf("OR\n");
     printf("  %s -c <chip> [funcs] [GPIO]\n", name);
     printf("\n");
     printf("GPIO is a comma-separated list of GPIO names, numbers or ranges (without\n");
@@ -115,6 +117,7 @@ static void usage()
     printf("  %s set 10 ip pd     Set GPIO10 to input with pull down\n", name);
     printf("  %s set 35 a1 pu     Set GPIO35 to fsel 1 (jtag_2_clk) with pull up\n", name);
     printf("  %s set 20 op pn dh  Set GPIO20 to output with no pull and driving high\n", name);
+    printf("  %s lev 4            Prints the level (1 or 0) of GPIO4\n", name);
     printf("  %s -c bcm2835 9-11  Display the alt functions for GPIOs 9-11 on bcm2835\n", name);
 }
 
@@ -209,6 +212,48 @@ static int do_gpio_set(unsigned int gpio, int fsparam, int drive, int pull)
     return 0;
 }
 
+static int do_gpio_level(unsigned int gpio)
+{
+    unsigned int num = gpio;
+    int level;
+
+    if (pin_mode)
+    {
+        gpio = gpio_for_pin(num);
+        switch (gpio)
+        {
+        case GPIO_INVALID:
+            return 1;
+        case GPIO_GND:
+            printf("G");
+            return 0;
+        case GPIO_5V:
+            printf("5");
+            return 0;
+        case GPIO_3V3:
+            printf("3");
+            return 0;
+        case GPIO_1V8:
+            printf("8");
+            return 0;
+        case GPIO_OTHER:
+            printf("?");
+            return 0;
+        }
+    }
+
+    if (!gpio_num_is_valid(gpio))
+        return 1;
+
+    level = gpio_get_level(gpio);
+    if (level >= 0)
+        printf("%d", level);
+    else
+        printf("-");
+
+    return 0;
+}
+
 static int do_gpio_poll_add(unsigned int gpio)
 {
     struct poll_gpio_state *new_gpio;
@@ -288,6 +333,7 @@ int main(int argc, char *argv[])
 
     int set = 0;
     int get = 0;
+    int level = 0;
     int poll = 0;
     int funcs = 0;
     int echo = 0;
@@ -297,6 +343,7 @@ int main(int argc, char *argv[])
     int drive = DRIVE_MAX;
     uint32_t gpiomask[(MAX_GPIO_PINS + 31)/32] = { 0 };
     unsigned start_pin = GPIO_INVALID, end_pin, pin;
+    int first_pin = 1;
     int i;
 
     argv++;
@@ -376,10 +423,11 @@ int main(int argc, char *argv[])
 
         get = strcmp(cmd, "get") == 0;
         set = strcmp(cmd, "set") == 0;
+        level = strcmp(cmd, "level") == 0 || strcmp(cmd, "lev") == 0;
         poll = strcmp(cmd, "poll") == 0;
         funcs = strcmp(cmd, "funcs") == 0;
 
-        if (!set && !get && !poll && !funcs)
+        if (!set && !get && !level && !poll && !funcs)
         {
             /* Back up in case we can decode this as a pin */
             argv--;
@@ -628,11 +676,21 @@ int main(int argc, char *argv[])
             do_gpio_get(pin);
         if (set)
             do_gpio_set(pin, fsparam, drive, pull);
+        if (level)
+        {
+            if (!first_pin)
+                printf(" ");
+            do_gpio_level(pin);
+            first_pin = 0;
+        }
         if (poll)
             do_gpio_poll_add(pin);
         if (funcs)
             print_gpio_alts_info(pin);
     }
+
+    if (level)
+        printf("\n");
 
     if (set && echo)
     {

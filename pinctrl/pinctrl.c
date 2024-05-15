@@ -307,6 +307,7 @@ static void do_gpio_poll(void)
                 printf("%2d: %s // %s\n", state->num, level ? "hi" : "lo", state->name);
                 state->level = level;
                 changed = 1;
+                fflush(stdout);
             }
         }
         if (!changed)

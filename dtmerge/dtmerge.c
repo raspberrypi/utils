@@ -56,7 +56,7 @@ int main(int argc, char **argv)
     DTBLOB_T *overlay_dtb;
     int err = 0;
     int argn = 1;
-    int max_dtb_size = 100000;
+    int max_dtb_size = 200000;
     int compatible_len;
 
     while ((argn < argc) && (argv[argn][0] == '-'))

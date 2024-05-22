@@ -1133,7 +1133,7 @@ sub parse_node
 						$next = match($state, '[');
 						while ($next ne ']')
 						{
-							push @$vals, $next;
+							push @$vals, @{byte_array_value($next)};
 							$next = match($state, $next);
 						}
 						$next = match($state, ']');
@@ -1252,11 +1252,12 @@ sub dump_node
 			}
 			elsif ($chunk->[0] =~ '<')
 			{
-				push @terms, '<'.join(' ', @{$chunk->[2]}).'>';
+				push @terms, (($chunk->[1] != 4) ? sprintf("/bits/ %d ", $chunk->[1] * 8) : '') .
+							 '<'.join(' ', @{$chunk->[2]}).'>';
 			}
 			elsif ($chunk->[0] eq '[')
 			{
-				push @terms, '['.join(' ', @{$chunk->[2]}).']';
+				push @terms, '['.byte_array_string($chunk->[2]).']';
 			}
 			else
 			{
@@ -1929,7 +1930,7 @@ sub find_prop_chunk
 		}
 		elsif ($type eq '[')
 		{
-			$end = $pos + @{$chunk->[1]};
+			$end = $pos + @{$chunk->[2]};
 		}
 		else
 		{
@@ -2024,13 +2025,29 @@ sub boolean_value
 sub byte_array_value
 {
 	my ($value) = @_;
-	my $arr = [ split(/[: ]/, $value) ];
-	foreach my $val (@$arr)
+	my $arr = [];
+	foreach my $val (split(/[: ]/, $value))
 	{
 		die "* invalid bytestring at '$val'\n"
 		    if ($val !~ /^([0-9a-f][0-9a-f])*$/i);
+		while ($val =~ m/(..)/g)
+		{
+			push @$arr, hex($1);
+		}
 	}
 	return $arr;
+}
+
+sub byte_array_string
+{
+	my ($arr) = @_;
+	my $str = "";
+	foreach my $val (@$arr)
+	{
+		$str .= ' ' if ($str);
+		$str .= sprintf("%02x", $val);
+	}
+	return $str;
 }
 
 sub set_add

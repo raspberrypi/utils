@@ -72,6 +72,7 @@ enum
 };
 
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define ARRAY_SIZE(_a) (sizeof(_a)/sizeof(_a[0]))
 
 #define FBIODMACOPY _IOW('z', 0x22, struct fb_dmacopy)
@@ -207,7 +208,7 @@ int32_t main(int32_t argc, char *argv[])
             if (payload_len > payload_buffer_size)
             {
                 payload_buffer_size = MAX(payload_len, 100); // skip some churn
-                payload_buffer = realloc(payload_buffer, payload_buffer_size);
+                payload_buffer = realloc(payload_buffer, MIN(INT32_MAX, payload_buffer_size));
                 if (!payload_buffer)
                     die("Out of memory");
             }

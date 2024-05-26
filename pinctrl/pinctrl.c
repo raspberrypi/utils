@@ -316,6 +316,7 @@ static void do_gpio_poll(void)
                 gettimeofday(&idle_start, NULL);
             idle_count++;
         }
+        usleep(10000); // wait 10ms per polling loop, prevent "pinctrl poll" taking 100% CPU resources from one core
     }
 }
 

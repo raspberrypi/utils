@@ -101,7 +101,7 @@ static void usage()
     printf("  a0-a8   set GPIO to alt function in the range 0 to 8 (range varies by model)\n");
     printf("  no      set GPIO to no function (NONE)\n");
     printf("  pu      set GPIO in-pad pull up\n");
-    printf("  pd      set GPIO pin-pad pull down\n");
+    printf("  pd      set GPIO in-pad pull down\n");
     printf("  pn      set GPIO pull none (no pull)\n");
     printf("  dh      set GPIO to drive high (1) level (only valid if set to be an output)\n");
     printf("  dl      set GPIO to drive low (0) level (only valid if set to be an output)\n");

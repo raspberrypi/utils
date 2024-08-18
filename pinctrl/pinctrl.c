@@ -94,6 +94,7 @@ static void usage()
     printf("or if [GPIO] is specified the alternate funcs just for that specific GPIO.\n");
     printf("The -c option allows the alt functions (and only the alt function) for a named\n");
     printf("chip to be displayed, even if that chip is not present in the current system.\n");
+    printf("note that 'chip' refers to SoC; e.g. bcm2712 for Pi5, bcm2711 for RPi 4, etc.\n");
     printf("\n");
     printf("Valid [options] for %s set are:\n", name);
     printf("  ip      set GPIO as input\n");

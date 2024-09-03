@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 _pinctrl ()
 {
     local cur prev words cword split cmd pins pincomp ALLPINS CHIPS chip pinmode=false prefix arg i func pull;

@@ -1032,7 +1032,7 @@ sub parse_node
 
 	$node = (get_child($parent, $node) || add_node($parent, $node)) if (!ref $node);
 
-	printf("parse_node(%s, %d ...) - %s\n", $node->[0], $depth) if ($trace);
+	printf("parse_node(%s, %d ...)\n", $node->[0], $depth) if ($trace);
 
 	# Parse the properties first
 

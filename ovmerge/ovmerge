@@ -1785,9 +1785,9 @@ sub renumber_fragments
 
 	foreach my $ovr (@{$overrides->[1]})
 	{
-		for (my $pos = 1; $pos < @$ovr; $pos++)
+		for (my $pos = 1; ($pos + 1) < @$ovr; $pos++)
 		{
-			if ((get_label_ref($ovr->[$pos]) || '') eq '0')
+			if ((get_label_ref($ovr->[$pos]) // '') eq '0')
 			{
 				$pos++;
 				while ($ovr->[$pos]->[1] =~ /\G[=!+-](\d+)/g)

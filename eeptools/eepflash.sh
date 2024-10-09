@@ -155,7 +155,7 @@ if [ $rc != 0 ]; then
 	exit $rc
 fi
 
-SYS=/sys/class/i2c-adapter/i2c-$BUS
+SYS=/sys/class/i2c-dev/i2c-$BUS/device
 
 if [ ! -d "$SYS/$BUS-00$ADDR" ]; then
 	echo "$TYPE 0x$ADDR" > $SYS/new_device

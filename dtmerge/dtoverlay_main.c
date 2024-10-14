@@ -600,7 +600,7 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
 {
     const char *overlay_name;
     const char *overlay_file;
-    const char *overrides = NULL;
+    char *overrides = NULL;
     char *param_string = NULL;
     int is_dtparam;
     DTBLOB_T *base_dtb = NULL;
@@ -635,16 +635,40 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
     }
     else
     {
-        const char *remapped = dtoverlay_remap_overlay(overlay);
+        /* Allow for comma-separated parameters */
+        const char *in_params = strchr(overlay, ',');
+        const char *remapped;
         int name_len;
+
+        if (in_params && in_params[1])
+        {
+            int len = in_params - overlay;
+            overlay = sprintf_dup("%.*s", len, overlay);
+            if (!overlay)
+                return error("Out of memory");
+            in_params++;
+        }
+        else
+        {
+            in_params = "";
+        }
+
+        remapped = dtoverlay_remap_overlay(overlay);
         if (!remapped)
             return error("Failed to load '%s'", overlay);
         if (strcmp(overlay, remapped))
             dtoverlay_debug("mapped overlay '%s' to '%s'", overlay, remapped);
         overlay = remapped;
         name_len = strcspn(overlay, ",");
-        if (overlay[name_len])
-            overrides = overlay + name_len + 1;
+        if (overlay[name_len] && overlay[name_len + 1])
+        {
+            /* There are parameters */
+            overrides = sprintf_dup("%s,%s", overlay + name_len + 1, in_params);
+        }
+        else
+        {
+            overrides = strdup(in_params);
+        }
         overlay = sprintf_dup("%.*s", name_len, overlay);
         overlay_file = sprintf_dup("%s/%s.dtbo", overlay_src_dir, overlay);
     }
@@ -666,24 +690,23 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
 
     dtoverlay_set_cell_changed_callback(&cell_changed_callback);
 
-    /* Apply any parameters that came from the overlay map */
+    /* Apply any parameters that came from the overlay map, along with
+       any supplied on the command line separated by commas */
     while (overrides && *overrides)
     {
         int override_len = strcspn(overrides, ",");
-        char *override = strndup(overrides, override_len);
-        if (!override)
-            return error("Out of memory applying parameter");
-        err = apply_parameter(overlay_dtb, override, is_dtparam,
+        int last = !overrides[override_len];
+        overrides[override_len] = '\0';
+        err = apply_parameter(overlay_dtb, overrides, is_dtparam,
                               &used_props, &param_string);
-        free(override);
         if (err)
             return err;
-        if (!overrides[override_len])
+        if (last)
             break;
         overrides += override_len + 1;
     }
 
-    /* Then any supplied on the commad line */
+    /* Then any others supplied on the command line */
     for (i = 0; i < argc; i++)
     {
         err = apply_parameter(overlay_dtb, argv[i], is_dtparam,

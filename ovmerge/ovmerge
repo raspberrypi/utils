@@ -74,6 +74,7 @@
 use strict;
 use integer;
 use warnings;
+no warnings 'portable';
 
 use POSIX qw(strftime);
 

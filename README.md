@@ -15,6 +15,7 @@ A collection of scripts and simple applications
 * [pinctrl](pinctrl/) - A more powerful replacement for raspi-gpio, a tool for
     displaying and modifying the GPIO and pin muxing state of a system, bypassing
     the kernel.
+* [piolib](piolib/) - A library for accessing the Pi 5's PIO hardware.
 * [raspinfo](raspinfo/) - A short script to dump information about the Pi. Intended for
     the submission of bug reports.
 * [vclog](vclog/) - A tool to get VideoCore 'assert' or 'msg' logs

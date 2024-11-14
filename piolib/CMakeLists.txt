@@ -35,6 +35,11 @@ target_include_directories(piows2812 PRIVATE .)
 target_link_libraries(piows2812 pio)
 install(TARGETS piows2812 RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
+add_executable(dpi_interlace dpi_interlace.c)
+target_include_directories(dpi_interlace PRIVATE .)
+target_link_libraries(dpi_interlace pio)
+install(TARGETS dpi_interlace RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
 add_executable(rp1sm rp1sm.c)
 target_include_directories(rp1sm PRIVATE .)
 target_link_libraries(rp1sm pio)

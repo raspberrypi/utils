@@ -24,6 +24,7 @@ extern "C" {
 #define PIO_ERR_VAL(x)((int)(uintptr_t)(x))
 
 #define PIO_ORIGIN_ANY          ((uint)(~0))
+#define PIO_ORIGIN_INVALID      PIO_ORIGIN_ANY
 
 #define pio0 pio_open_helper(0)
 
@@ -298,7 +299,7 @@ static inline uint pio_add_program(PIO pio, const pio_program_t *program)
     uint offset;
     check_pio_param(pio);
     offset = pio->chip->pio_add_program_at_offset(pio, program, PIO_ORIGIN_ANY);
-    if (offset == PIO_ORIGIN_ANY)
+    if (offset == PIO_ORIGIN_INVALID)
         pio_error(pio, "No program space");
     return offset;
 }
@@ -306,7 +307,7 @@ static inline uint pio_add_program(PIO pio, const pio_program_t *program)
 static inline void pio_add_program_at_offset(PIO pio, const pio_program_t *program, uint offset)
 {
     check_pio_param(pio);
-    if (pio->chip->pio_add_program_at_offset(pio, program, offset) == PIO_ORIGIN_ANY)
+    if (pio->chip->pio_add_program_at_offset(pio, program, offset) == PIO_ORIGIN_INVALID)
         pio_error(pio, "No program space");
 }
 

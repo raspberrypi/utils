@@ -11,6 +11,11 @@ if (CMAKE_COMPILER_IS_GNUCC)
    add_definitions (-ffunction-sections)
 endif ()
 
+add_executable(apitest apitest.c)
+target_include_directories(apitest PRIVATE ../include)
+target_link_libraries(apitest pio)
+install(TARGETS apitest RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
 add_executable(piotest piotest.c)
 target_include_directories(piotest PRIVATE ../include)
 target_link_libraries(piotest pio)

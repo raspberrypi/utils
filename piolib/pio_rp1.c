@@ -527,7 +527,69 @@ static void rp1_pio_sm_set_dmactrl(PIO pio, uint sm, bool is_tx, uint32_t ctrl)
 
     check_sm_param(sm);
     (void)rp1_ioctl(pio, PIO_IOC_SM_SET_DMACTRL, &args);
-};
+}
+
+static bool rp1_pio_sm_is_rx_fifo_empty(PIO pio, uint sm)
+{
+    struct rp1_pio_sm_fifo_state_args args = { .sm = sm, .tx = false };
+
+    check_sm_param(sm);
+    (void)rp1_ioctl(pio, PIO_IOC_SM_FIFO_STATE, &args);
+    return args.empty;
+}
+
+static bool rp1_pio_sm_is_rx_fifo_full(PIO pio, uint sm)
+{
+    struct rp1_pio_sm_fifo_state_args args = { .sm = sm, .tx = false };
+
+    check_sm_param(sm);
+    (void)rp1_ioctl(pio, PIO_IOC_SM_FIFO_STATE, &args);
+    return args.full;
+}
+
+static uint rp1_pio_sm_get_rx_fifo_level(PIO pio, uint sm)
+{
+    struct rp1_pio_sm_fifo_state_args args = { .sm = sm, .tx = false };
+
+    check_sm_param(sm);
+    (void)rp1_ioctl(pio, PIO_IOC_SM_FIFO_STATE, &args);
+    return args.level;
+}
+
+static bool rp1_pio_sm_is_tx_fifo_empty(PIO pio, uint sm)
+{
+    struct rp1_pio_sm_fifo_state_args args = { .sm = sm, .tx = true };
+
+    check_sm_param(sm);
+    (void)rp1_ioctl(pio, PIO_IOC_SM_FIFO_STATE, &args);
+    return args.empty;
+}
+
+static bool rp1_pio_sm_is_tx_fifo_full(PIO pio, uint sm)
+{
+    struct rp1_pio_sm_fifo_state_args args = { .sm = sm, .tx = true };
+
+    check_sm_param(sm);
+    (void)rp1_ioctl(pio, PIO_IOC_SM_FIFO_STATE, &args);
+    return args.full;
+}
+
+static uint rp1_pio_sm_get_tx_fifo_level(PIO pio, uint sm)
+{
+    struct rp1_pio_sm_fifo_state_args args = { .sm = sm, .tx = true };
+
+    check_sm_param(sm);
+    (void)rp1_ioctl(pio, PIO_IOC_SM_FIFO_STATE, &args);
+    return args.level;
+}
+
+static void rp1_pio_sm_drain_tx_fifo(PIO pio, uint sm)
+{
+    struct rp1_pio_sm_clear_fifos_args args = { .sm = sm };
+
+    check_sm_param(sm);
+    (void)rp1_ioctl(pio, PIO_IOC_SM_DRAIN_TX, &args);
+}
 
 static void rp1_smc_set_out_pins(PIO, pio_sm_config *config, uint out_base, uint out_count)
 {
@@ -863,6 +925,13 @@ static const PIO_CHIP_T rp1_pio_chip = {
     .pio_sm_put = rp1_pio_sm_put,
     .pio_sm_get = rp1_pio_sm_get,
     .pio_sm_set_dmactrl = rp1_pio_sm_set_dmactrl,
+    .pio_sm_is_rx_fifo_empty = rp1_pio_sm_is_rx_fifo_empty,
+    .pio_sm_is_rx_fifo_full = rp1_pio_sm_is_rx_fifo_full,
+    .pio_sm_get_rx_fifo_level = rp1_pio_sm_get_rx_fifo_level,
+    .pio_sm_is_tx_fifo_empty = rp1_pio_sm_is_tx_fifo_empty,
+    .pio_sm_is_tx_fifo_full = rp1_pio_sm_is_tx_fifo_full,
+    .pio_sm_get_tx_fifo_level = rp1_pio_sm_get_tx_fifo_level,
+    .pio_sm_drain_tx_fifo = rp1_pio_sm_drain_tx_fifo,
 
     .pio_get_default_sm_config = rp1_pio_get_default_sm_config,
     .smc_set_out_pins = rp1_smc_set_out_pins,

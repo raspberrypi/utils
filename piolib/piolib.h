@@ -168,6 +168,13 @@ struct pio_chip {
     void (*pio_sm_put)(PIO pio, uint sm, uint32_t data, bool blocking);
     uint32_t (*pio_sm_get)(PIO pio, uint sm, bool blocking);
     void (*pio_sm_set_dmactrl)(PIO pio, uint sm, bool is_tx, uint32_t ctrl);
+    bool (*pio_sm_is_rx_fifo_empty)(PIO pio, uint sm);
+    bool (*pio_sm_is_rx_fifo_full)(PIO pio, uint sm);
+    uint (*pio_sm_get_rx_fifo_level)(PIO pio, uint sm);
+    bool (*pio_sm_is_tx_fifo_empty)(PIO pio, uint sm);
+    bool (*pio_sm_is_tx_fifo_full)(PIO pio, uint sm);
+    uint (*pio_sm_get_tx_fifo_level)(PIO pio, uint sm);
+    void (*pio_sm_drain_tx_fifo)(PIO pio, uint sm);
 
     pio_sm_config (*pio_get_default_sm_config)(PIO pio);
     void (*smc_set_out_pins)(PIO pio, pio_sm_config *c, uint out_base, uint out_count);
@@ -569,6 +576,48 @@ static inline void pio_sm_set_dmactrl(PIO pio, uint sm, bool is_tx, uint32_t ctr
     check_pio_param(pio);
     pio->chip->pio_sm_set_dmactrl(pio, sm, is_tx, ctrl);
 };
+
+static inline bool pio_sm_is_rx_fifo_empty(PIO pio, uint sm)
+{
+    check_pio_param(pio);
+    return pio->chip->pio_sm_is_rx_fifo_empty(pio, sm);
+}
+
+static inline bool pio_sm_is_rx_fifo_full(PIO pio, uint sm)
+{
+    check_pio_param(pio);
+    return pio->chip->pio_sm_is_rx_fifo_full(pio, sm);
+}
+
+static inline uint pio_sm_get_rx_fifo_level(PIO pio, uint sm)
+{
+    check_pio_param(pio);
+    return pio->chip->pio_sm_get_rx_fifo_level(pio, sm);
+}
+
+static inline bool pio_sm_is_tx_fifo_empty(PIO pio, uint sm)
+{
+    check_pio_param(pio);
+    return pio->chip->pio_sm_is_tx_fifo_empty(pio, sm);
+}
+
+static inline bool pio_sm_is_tx_fifo_full(PIO pio, uint sm)
+{
+    check_pio_param(pio);
+    return pio->chip->pio_sm_is_tx_fifo_full(pio, sm);
+}
+
+static inline uint pio_sm_get_tx_fifo_level(PIO pio, uint sm)
+{
+    check_pio_param(pio);
+    return pio->chip->pio_sm_get_tx_fifo_level(pio, sm);
+}
+
+static inline void pio_sm_drain_tx_fifo(PIO pio, uint sm)
+{
+    check_pio_param(pio);
+    return pio->chip->pio_sm_drain_tx_fifo(pio, sm);
+}
 
 static inline void pio_sm_put(PIO pio, uint sm, uint32_t data)
 {

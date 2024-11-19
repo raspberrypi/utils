@@ -148,7 +148,8 @@ PIO pio_open_helper(uint idx)
     if (!pio || !pio->in_use) {
         pio = pio_open(idx);
         if (PIO_IS_ERR(pio)) {
-            printf("* Failed to open PIO device %d (error %d)\n", idx, PIO_ERR_VAL(pio));
+            printf("* Failed to open PIO device %d (error %d)\n",
+                   idx, PIO_ERR_VAL(pio));
             exit(1);
         }
     }
@@ -170,9 +171,9 @@ void pio_panic(const char *msg)
 }
 
 void sleep_us(uint64_t us) {
-        const struct timespec tv = {
-            .tv_sec = (us / 1000000),
-            .tv_nsec = 1000ull * (us % 1000000)
-        };
-        nanosleep(&tv, NULL);
+    const struct timespec tv = {
+        .tv_sec = (us / 1000000),
+        .tv_nsec = 1000ull * (us % 1000000)
+    };
+    nanosleep(&tv, NULL);
 }

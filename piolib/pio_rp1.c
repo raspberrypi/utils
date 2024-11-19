@@ -299,39 +299,39 @@ static uint rp1_pio_add_program_at_offset(PIO pio, const pio_program_t *program,
     return rp1_ioctl(pio, PIO_IOC_ADD_PROGRAM, &args);
 }
 
-static void rp1_pio_remove_program(PIO pio, const pio_program_t *program, uint offset)
+static bool rp1_pio_remove_program(PIO pio, const pio_program_t *program, uint offset)
 {
     struct rp1_pio_remove_program_args args = { .num_instrs = program->length, .origin = offset };
     valid_params_if(PIO, offset < RP1_PIO_INSTRUCTION_COUNT);
     valid_params_if(PIO, offset + program->length <= RP1_PIO_INSTRUCTION_COUNT);
-    (void)rp1_ioctl(pio, PIO_IOC_REMOVE_PROGRAM, &args);
+    return !rp1_ioctl(pio, PIO_IOC_REMOVE_PROGRAM, &args);
 }
 
-static void rp1_pio_clear_instruction_memory(PIO pio)
+static bool rp1_pio_clear_instruction_memory(PIO pio)
 {
-    (void)rp1_ioctl(pio, PIO_IOC_CLEAR_INSTR_MEM, NULL);
+    return !rp1_ioctl(pio, PIO_IOC_CLEAR_INSTR_MEM, NULL);
 }
 
-static void rp1_pio_sm_claim(PIO pio, uint sm)
+static bool rp1_pio_sm_claim(PIO pio, uint sm)
 {
     struct rp1_pio_sm_claim_args args = { .mask = (1 << sm) };
     check_sm_param(sm);
-    (void)rp1_ioctl(pio, PIO_IOC_SM_CLAIM, &args);
+    return (rp1_ioctl(pio, PIO_IOC_SM_CLAIM, &args) >= 0);
 }
 
-static void rp1_pio_sm_claim_mask(PIO pio, uint mask)
+static bool rp1_pio_sm_claim_mask(PIO pio, uint mask)
 {
     struct rp1_pio_sm_claim_args args = { .mask = mask };
     valid_params_if(PIO, !!mask);
     check_sm_mask(mask);
-    (void)rp1_ioctl(pio, PIO_IOC_SM_CLAIM, &args);
+    return (rp1_ioctl(pio, PIO_IOC_SM_CLAIM, &args) >= 0);
 }
 
-static void rp1_pio_sm_unclaim(PIO pio, uint sm)
+static bool rp1_pio_sm_unclaim(PIO pio, uint sm)
 {
     struct rp1_pio_sm_claim_args args = { .mask = (1 << sm) };
     check_sm_param(sm);
-    (void)rp1_ioctl(pio, PIO_IOC_SM_UNCLAIM, &args);
+    return !rp1_ioctl(pio, PIO_IOC_SM_UNCLAIM, &args);
 }
 
 static int rp1_pio_sm_claim_unused(PIO pio, bool required)

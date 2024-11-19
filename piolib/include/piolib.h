@@ -117,8 +117,8 @@ struct pio_chip {
 
     bool (*pio_can_add_program_at_offset)(PIO pio, const pio_program_t *program, uint offset);
     uint (*pio_add_program_at_offset)(PIO pio, const pio_program_t *program, uint offset);
-    void (*pio_remove_program)(PIO pio, const pio_program_t *program, uint loaded_offset);
-    void (*pio_clear_instruction_memory)(PIO pio);
+    bool (*pio_remove_program)(PIO pio, const pio_program_t *program, uint loaded_offset);
+    bool (*pio_clear_instruction_memory)(PIO pio);
     uint (*pio_encode_delay)(PIO pio, uint cycles);
     uint (*pio_encode_sideset)(PIO pio, uint sideset_bit_count, uint value);
     uint (*pio_encode_sideset_opt)(PIO pio, uint sideset_bit_count, uint value);
@@ -146,10 +146,10 @@ struct pio_chip {
     uint (*pio_encode_set)(PIO pio, enum pio_src_dest dest, uint value);
     uint (*pio_encode_nop)(PIO pio);
 
-    void (*pio_sm_claim)(PIO pio, uint sm);
-    void (*pio_sm_claim_mask)(PIO pio, uint mask);
+    bool (*pio_sm_claim)(PIO pio, uint sm);
+    bool (*pio_sm_claim_mask)(PIO pio, uint mask);
     int (*pio_sm_claim_unused)(PIO pio, bool required);
-    void (*pio_sm_unclaim)(PIO pio, uint sm);
+    bool (*pio_sm_unclaim)(PIO pio, uint sm);
     bool (*pio_sm_is_claimed)(PIO pio, uint sm);
 
     void (*pio_sm_init)(PIO pio, uint sm, uint initial_pc, const pio_sm_config *config);
@@ -211,7 +211,8 @@ struct pio_chip {
 struct pio_instance {
     const PIO_CHIP_T *chip;
     int in_use;
-    int err;
+    bool errors_are_fatal;
+    bool error;
 };
 
 int pio_init(void);
@@ -223,6 +224,28 @@ void pio_panic(const char *msg);
 int pio_get_index(PIO pio);
 void pio_select(PIO pio);
 PIO pio_get_current(void);
+
+static inline void pio_error(PIO pio, const char *msg)
+{
+    pio->error = true;
+    if (pio->errors_are_fatal)
+        pio_panic(msg);
+}
+
+static inline bool pio_get_error(PIO pio)
+{
+    return pio->error;
+}
+
+static inline void pio_clear_error(PIO pio)
+{
+    pio->error = false;
+}
+
+static inline void pio_enable_fatal_errors(PIO pio, bool enable)
+{
+    pio->errors_are_fatal = enable;
+}
 
 static inline void check_pio_param(__unused PIO pio)
 {
@@ -259,26 +282,29 @@ static inline uint pio_add_program(PIO pio, const pio_program_t *program)
     check_pio_param(pio);
     offset = pio->chip->pio_add_program_at_offset(pio, program, PIO_ORIGIN_ANY);
     if (offset == PIO_ORIGIN_ANY)
-        pio_panic("No program space");
+        pio_error(pio, "No program space");
     return offset;
 }
 
 static inline void pio_add_program_at_offset(PIO pio, const pio_program_t *program, uint offset)
 {
     check_pio_param(pio);
-    (void)pio->chip->pio_add_program_at_offset(pio, program, offset);
+    if (pio->chip->pio_add_program_at_offset(pio, program, offset) == PIO_ORIGIN_ANY)
+        pio_error(pio, "No program space");
 }
 
 static inline void pio_remove_program(PIO pio, const pio_program_t *program, uint loaded_offset)
 {
     check_pio_param(pio);
-    pio->chip->pio_remove_program(pio, program, loaded_offset);
+    if (!pio->chip->pio_remove_program(pio, program, loaded_offset))
+        pio_error(pio, "Failed to remove program");
 }
 
 static inline void pio_clear_instruction_memory(PIO pio)
 {
     check_pio_param(pio);
-    pio->chip->pio_clear_instruction_memory(pio);
+    if (!pio->chip->pio_clear_instruction_memory(pio))
+        pio_error(pio, "Failed to clear instruction memory");
 }
 
 static inline uint pio_encode_delay(uint cycles)
@@ -440,13 +466,15 @@ static inline uint pio_encode_nop(void)
 static inline void pio_sm_claim(PIO pio, uint sm)
 {
     check_pio_param(pio);
-    pio->chip->pio_sm_claim(pio, sm);
+    if (!pio->chip->pio_sm_claim(pio, sm))
+        pio_error(pio, "Failed to claim SM");
 }
 
 static inline void pio_claim_sm_mask(PIO pio, uint mask)
 {
     check_pio_param(pio);
-    pio->chip->pio_sm_claim_mask(pio, mask);
+    if (!pio->chip->pio_sm_claim_mask(pio, mask))
+        pio_error(pio, "Failed to claim masked SMs");
 }
 
 static inline void pio_sm_unclaim(PIO pio, uint sm)

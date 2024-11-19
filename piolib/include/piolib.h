@@ -7,6 +7,10 @@
 #ifndef _PIOLIB_H
 #define _PIOLIB_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "pio_platform.h"
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
@@ -819,7 +823,11 @@ static inline void stdio_init_all(void)
 void sleep_us(uint64_t us);
 
 static inline void sleep_ms(uint32_t ms) {
-    sleep_us(ms * 1000ull);
+    sleep_us((uint64_t)(ms * (uint64_t)1000));
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

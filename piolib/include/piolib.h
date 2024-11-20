@@ -92,6 +92,7 @@ typedef struct pio_program {
     const uint16_t *instructions;
     uint8_t length;
     int8_t origin; // required instruction memory origin or -1
+    uint8_t pio_version;
 } pio_program_t;
 
 typedef struct {
@@ -106,6 +107,7 @@ struct pio_chip {
     const char *compatible;
     uint16_t instr_count;
     uint16_t sm_count;
+    uint16_t fifo_depth;
     void *hw_state;
 
     PIO (*create_instance)(PIO_CHIP_T *chip, uint index);
@@ -245,6 +247,21 @@ static inline void pio_clear_error(PIO pio)
 static inline void pio_enable_fatal_errors(PIO pio, bool enable)
 {
     pio->errors_are_fatal = enable;
+}
+
+static inline uint pio_get_sm_count(PIO pio)
+{
+    return pio->chip->sm_count;
+}
+
+static inline uint pio_get_instruction_count(PIO pio)
+{
+    return pio->chip->instr_count;
+}
+
+static inline uint pio_get_fifo_depth(PIO pio)
+{
+    return pio->chip->fifo_depth;
 }
 
 static inline void check_pio_param(__unused PIO pio)

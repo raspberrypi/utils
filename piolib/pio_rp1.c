@@ -860,6 +860,7 @@ static const PIO_CHIP_T rp1_pio_chip = {
     .compatible = "raspberrypi,rp1-pio",
     .instr_count = RP1_PIO_INSTRUCTION_COUNT,
     .sm_count =  RP1_PIO_SM_COUNT,
+    .fifo_depth = 8,
 
     .create_instance = rp1_create_instance,
     .open_instance = rp1_open_instance,

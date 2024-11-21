@@ -304,7 +304,7 @@ static void rp1_pio_remove_program(PIO pio, const pio_program_t *program, uint o
     struct rp1_pio_remove_program_args args = { .num_instrs = program->length, .origin = offset };
     valid_params_if(PIO, offset < RP1_PIO_INSTRUCTION_COUNT);
     valid_params_if(PIO, offset + program->length <= RP1_PIO_INSTRUCTION_COUNT);
-    (void)rp1_ioctl(pio, PIO_IOC_ADD_PROGRAM, &args);
+    (void)rp1_ioctl(pio, PIO_IOC_REMOVE_PROGRAM, &args);
 }
 
 static void rp1_pio_clear_instruction_memory(PIO pio)
@@ -765,7 +765,7 @@ static void rp1_gpio_set_pulls(PIO pio, uint gpio, bool up, bool down)
     struct rp1_gpio_set_pulls_args args = { .gpio = gpio, .up = up, .down = down };
 
     valid_params_if(PIO, gpio < RP1_PIO_GPIO_COUNT);
-    (void)rp1_ioctl(pio, PIO_IOC_GPIO_SET_FUNCTION, &args);
+    (void)rp1_ioctl(pio, PIO_IOC_GPIO_SET_PULLS, &args);
 }
 
 static void rp1_gpio_set_outover(PIO pio, uint gpio, uint value)

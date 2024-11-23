@@ -9,7 +9,7 @@ Install the prerequisites with "sudo apt install cmake device-tree-compiler" - y
  - *cmake .*
  - *sudo make install*
 
-Alternatively, you can just download the latest version using:
+Alternatively, to avoid fetching the entire `utils` repository and its history, you can just download it with:
 ```
 $ wget https://raw.githubusercontent.com/raspberrypi/utils/refs/heads/master/kdtc/kdtc
 $ chmod +x kdtc
@@ -30,6 +30,23 @@ Usage: kdtc [<opts>] [<infile> [<outfile>]]
 
   When run with no dtc options, kdtc detects the input format and attempts
   to do the right thing.
+```
 
-If run within a git kernel source tree, the kerndir path is inferred.
+Assuming `kdtc` is in your PATH, compiling an overlay without `#include`s is simple:
+```
+$ kdtc widget-overlay.dts widget.dtbo
+```
+For an overlay written as if it were in the kernel tree with `#include`s, use either:
+```
+$ kdtc -k /path/to/kernel doofer-overlay.dts doofer.dtbo
+```
+Or, running from a directory within the kernel tree:
+```
+$ kdtc /path/to/whatsit-overlay.dts /path/to/whatsit.dtbo
+```
+(When run within a git kernel source tree, the `--kerndir` path is inferred.)
+
+To decompile an overlay to `stdout`:
+```
+$ kdtc mystery.dtbo
 ```

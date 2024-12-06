@@ -82,6 +82,7 @@ my $in_file = $ARGV[0];
 if (!$out_file)
 {
     $out_file = $ARGV[1];
+    $out_file = "$1.dtbo" if (!$out_file && $in_file =~ /^(.+)-overlay.dts$/);
     push @args, '-o', $out_file if ($out_file);
 }
 
@@ -180,8 +181,9 @@ sub usage
     print("\n");
     print("  or any dtc options (see 'dtc -h')\n");
     print("\n");
-    print("  When run with no dtc options, kdtc detects the input format and attempts\n");
-    print("  to do the right thing.\n");
+    print("When run with no dtc options, kdtc detects the input format and attempts\n");
+    print("to do the right thing. With no <outfile>, kdtc will infer 'x.dtbo' from an\n");
+    print("<infile> of 'x-overlay.dts'.\n");
     print("\n");
     print("If run within a git kernel source tree, the kerndir path is inferred.\n");
     exit(0);

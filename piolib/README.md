@@ -22,8 +22,8 @@ Examples:
     The ws2812 example, unmodified except for dynamic SM allocation and a command line parameter to choose the GPIO. The optional parameter is the GPIO number to drive; the defailt is 2.
 * rp1sm:
     Show the state of the hardware for a particular SM. The parameter is the number of the state machine to inspect.
-* dpi_interlace:
-    Nick's interlaced sync fixer. More of an example than something actually usable right now - it may eventually be built into a kernel driver. Run with "-n" or "--ntsc" to enable NTSC timing (it's PAL by default=)
+* dpi_csync:
+    Nick's DPI composite sync generator. More of an example than something usable - it may conflict with the DPI driver in interlaced modes. Many parameters; defaults to SDTV line rate.
 
 Known issues:
 * Blocking operations block the whole RP1 firmware interface until they complete.

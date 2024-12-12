@@ -328,7 +328,7 @@ static int setup_pio_for_csync_ilace(PIO pio)
     pio_gpio_init(pio, opt_gpio);
     sm_config_set_jmp_pin(&cfg, 2); /* DPI VSync "helper" signal is GPIO 2 */
     pio_sm_init(pio, sm, offset, &cfg);
-    pio_sm_set_consecutive_pindirs(pio, sm, i, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, opt_gpio, 1, true);
     pio_sm_put(pio, sm, opt_vsw - 1);
     pio_sm_set_enabled(pio, sm, true);
 

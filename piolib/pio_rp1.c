@@ -264,10 +264,14 @@ static int rp1_pio_sm_config_xfer(PIO pio, uint sm, uint dir, uint buf_size, uin
 
 static int rp1_pio_sm_xfer_data(PIO pio, uint sm, uint dir, uint data_bytes, void *data)
 {
-    struct rp1_pio_sm_xfer_data_args args = { .sm = sm, .dir = dir, .data_bytes = data_bytes, .data = data };
+    struct rp1_pio_sm_xfer_data_args args = { .sm = sm, .dir = dir, .data_bytes = data_bytes, .rsvd = 0, .data = data };
+    struct rp1_pio_sm_xfer_data32_args args32 = { .sm = sm, .dir = dir, .data_bytes = data_bytes, .data = data };
     int err;
     check_sm_param(sm);
-    err = rp1_ioctl(pio, PIO_IOC_SM_XFER_DATA, &args);
+    if (data_bytes > 0xffff)
+        err = rp1_ioctl(pio, PIO_IOC_SM_XFER_DATA32, &args32);
+    else
+        err = rp1_ioctl(pio, PIO_IOC_SM_XFER_DATA, &args);
     return (err > 0);
 }
 

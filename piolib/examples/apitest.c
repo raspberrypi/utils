@@ -184,7 +184,7 @@ int main(int argc, const char **argv) {
         pio_panic("RX FIFO is not empty");
 
     offset = pio_add_program(pio, &genseq_program);
-    pio_sm_config_xfer(pio, sm, PIO_DIR_FROM_SM, 256, 1);
+    pio_sm_config_xfer(pio, sm, PIO_DIR_FROM_SM, 4096, 2);
 
     pio_gpio_init(pio, gpio);
     pio_sm_set_consecutive_pindirs(pio, sm, gpio, 1, true);
@@ -217,6 +217,24 @@ int main(int argc, const char **argv) {
             }
         }
         sleep_ms(10);
+    }
+
+    if (!ret)
+    {
+        const uint32_t words = 0x10000;
+        uint32_t *bigbuf = malloc(words * sizeof(bigbuf[0]));
+
+        pio_sm_put_blocking(pio, sm, words - 1);
+        ret = pio_sm_xfer_data(pio, sm, PIO_DIR_FROM_SM, words * sizeof(bigbuf[0]), bigbuf);
+        if (!ret) {
+            for (i = words - 1; i >= 0; i--)
+            {
+                int v = bigbuf[words - 1 - i];
+                if (v != i)
+                    printf(" %x: %x\n", i, v);
+            }
+        }
+        free(bigbuf);
     }
 
     if (ret)

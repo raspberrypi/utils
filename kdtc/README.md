@@ -9,6 +9,12 @@ Install the prerequisites with "sudo apt install cmake device-tree-compiler" - y
  - *cmake .*
  - *sudo make install*
 
+Alternatively, you can just download the latest version using:
+```
+$ wget https://raw.githubusercontent.com/raspberrypi/utils/refs/heads/master/kdtc/kdtc
+$ chmod +x kdtc
+```
+
 **Usage**
 ```
 Usage: kdtc [<opts>] [<infile> [<outfile>]]

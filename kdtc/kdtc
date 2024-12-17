@@ -21,7 +21,15 @@ my @warnings_to_suppress =
         'dma_ranges_format',
         'avoid_default_addr_size',
     );
-my $cpp = 'arm-linux-gnueabihf-cpp';
+my @cpp_files = ('arm-linux-gnueabihf-cpp', 'aarch64-linux-gnu-cpp', 'cpp');
+my $cpp;
+foreach my $cmd (@cpp_files) {
+    if (system("command -v $cmd >/dev/null 2>&1") == 0) {
+        $cpp = $cmd;
+        last;
+    }
+}
+die "* no suitable cpp found\n" if (!$cpp);
 my $dtc_opt;
 my $in_fmt;
 my $kerndir;

@@ -45,3 +45,8 @@ add_executable(rp1sm rp1sm.c)
 target_include_directories(rp1sm PRIVATE ../include)
 target_link_libraries(rp1sm pio)
 install(TARGETS rp1sm RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+add_executable(quadenc quadrature_encoder.c)
+target_include_directories(quadenc PRIVATE ../include)
+target_link_libraries(quadenc pio)
+install(TARGETS quadenc RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

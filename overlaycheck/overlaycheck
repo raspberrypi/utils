@@ -145,10 +145,19 @@ my @extra_dtsgroups = (
 );
 
 my $overlaysdir = $kerndir."/arch/arm/boot/dts/overlays";
+my @cpp_files = ('arm-linux-gnueabihf-cpp', 'aarch64-linux-gnu-cpp', 'cpp');
+my $cpp;
+foreach my $cmd (@cpp_files) {
+    if (system("command -v $cmd >/dev/null 2>&1") == 0) {
+        $cpp = $cmd;
+        last;
+    }
+}
+die "* no suitable cpp found\n" if (!$cpp);
 
 my @cpp_cmd =
     (
-        'arm-linux-gnueabihf-cpp',
+        $cpp,
         '-nostdinc',
         '-I.',
         "-I$kerndir/include",

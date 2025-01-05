@@ -94,7 +94,7 @@ static inline void quadrature_encoder_program_init(PIO pio, uint sm, uint pin, i
 }
 static inline int32_t quadrature_encoder_get_count(PIO pio, uint sm)
 {
-    uint ret;
+    uint ret = 0;
     int n;
     // if the FIFO has N entries, we fetch them to drain the FIFO,
     // plus one entry which will be guaranteed to not be stale

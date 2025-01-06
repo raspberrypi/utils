@@ -184,7 +184,14 @@ int main(int argc, const char **argv) {
         pio_panic("RX FIFO is not empty");
 
     offset = pio_add_program(pio, &genseq_program);
-    pio_sm_config_xfer(pio, sm, PIO_DIR_FROM_SM, 4096, 2);
+
+    if (!pio_sm_config_xfer(pio, sm, PIO_DIR_FROM_SM, 4096, 0))
+        pio_panic("DMA configuration didn't fail");
+    if (!pio_sm_xfer_data(pio, sm, PIO_DIR_FROM_SM, 4, NULL) ||
+        !pio_sm_xfer_data(pio, sm, PIO_DIR_FROM_SM, 0, databuf))
+        pio_panic("DMA transfer didn't fail");
+    if (pio_sm_config_xfer(pio, sm, PIO_DIR_FROM_SM, 4096, 2))
+        pio_panic("DMA configuration failed");
 
     pio_gpio_init(pio, gpio);
     pio_sm_set_consecutive_pindirs(pio, sm, gpio, 1, true);

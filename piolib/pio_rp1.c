@@ -256,10 +256,8 @@ static int rp1_ioctl(PIO pio, int request, void *args)
 static int rp1_pio_sm_config_xfer(PIO pio, uint sm, uint dir, uint buf_size, uint buf_count)
 {
     struct rp1_pio_sm_config_xfer_args args = { .sm = sm, .dir = dir, .buf_size = buf_size, .buf_count = buf_count };
-    int err;
     check_sm_param(sm);
-    err = rp1_ioctl(pio, PIO_IOC_SM_CONFIG_XFER, &args);
-    return (err > 0);
+    return rp1_ioctl(pio, PIO_IOC_SM_CONFIG_XFER, &args);
 }
 
 static int rp1_pio_sm_xfer_data(PIO pio, uint sm, uint dir, uint data_bytes, void *data)
@@ -272,7 +270,7 @@ static int rp1_pio_sm_xfer_data(PIO pio, uint sm, uint dir, uint data_bytes, voi
         err = rp1_ioctl(pio, PIO_IOC_SM_XFER_DATA32, &args32);
     else
         err = rp1_ioctl(pio, PIO_IOC_SM_XFER_DATA, &args);
-    return (err > 0);
+    return err;
 }
 
 static bool rp1_pio_can_add_program_at_offset(PIO pio, const pio_program_t *program, uint offset)

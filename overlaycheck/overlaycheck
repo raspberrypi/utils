@@ -204,6 +204,7 @@ my $dtc_opts = join(' ', @dtc_opts);
 # Parse the exclusions
 
 my ($ignore_missing, $ignore_vestigial) = parse_exclusions($exclusions_file);
+my $documentation = {};
 
 # Parse the README
 
@@ -230,6 +231,16 @@ $fail ||= (@$left_only || @$right_only);
 
 foreach my $overlay (@$common)
 {
+    for (my $i = 0; $i < @{$readme->{$overlay}}; $i++)
+    {
+        my $param = ${$readme->{$overlay}}[$i];
+        if ($documentation->{$param})
+        {
+            my $expansion = $readme->{$param};
+            splice(@{$readme->{$overlay}}, $i, 1, @$expansion);
+            $i += @$expansion - 1;
+        }
+    }
     my ($l, $b, $r) = compare_sets($source->{$overlay}, $readme->{$overlay});
     my $rpos = 0;
     while ($rpos < @$r)
@@ -560,6 +571,14 @@ sub parse_readme
                     $ignore_missing->{$overlay} = 1;
                     $ignore_vestigial->{$overlay} = 1;
                     $overlay = undef;
+                }
+                elsif ($cmd eq '<Documentation>')
+                {
+                    # Not a real overlay - a placeholder for common documentation
+                    $documentation->{$overlay} = 1;
+                    $ignore_missing->{$overlay} = 1;
+                    $ignore_vestigial->{$overlay} = 1;
+                    $has_params = 1;
                 }
                 else
                 {

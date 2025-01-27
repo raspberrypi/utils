@@ -94,13 +94,14 @@ my $show_includes = 0;
 my $pi_extras = 0;
 my $redo = 0;
 my $sort = 0;
-my $trace = 0;
 my $warnings = 0;
 my $no_dts = 0;
 my $cur_dt;
 my $retcode = 0;
 my $query = 0;
 my $force = 0;
+my $trace_parse = 0;
+my $trace_tree = 0;
 my $trace_prop = '';
 my $trace_label = '';
 my $indent_str = "\t";
@@ -176,7 +177,11 @@ while ($ARGV[0] =~ /^-/)
 	}
 	elsif ($arg eq '-t')
 	{
-		$trace = 1;
+		$trace_tree = 1;
+	}
+	elsif ($arg eq '-T')
+	{
+		$trace_parse = 1;
 	}
 	elsif ($arg eq '-w')
 	{
@@ -221,9 +226,11 @@ my @overlays;
 
 foreach my $overlay (@ARGV)
 {
+	printf("[ overlay %s ]\n", $overlay) if ($trace_tree);
 	$overlay =~ s/^([^,:]+)//;
 	my $ovname = $1;
 	my $dt = dtparse($ovname, $no_dts);
+	my $apply_params = ($overlay =~ /^,/);
 
 	next if ($show_includes || $expand);
 
@@ -263,6 +270,8 @@ foreach my $overlay (@ARGV)
 		dtparam($dt, $1, defined($2) ? $2 : '');
 	}
 
+	ovapply1($dt) if ($dt->{'plugin'});
+
 	my $exports = get_node($dt, '/__exports__');
 	$cur_dt = $dt;
 	if ($exports)
@@ -275,7 +284,7 @@ foreach my $overlay (@ARGV)
 			adj_ref(1, $expname);
 		}
 	}
-	if ($overlay =~ /^,/)
+	if ($apply_params)
 	{
 		delete_node(get_node($dt, '/__overrides__'));
 		foreach my $fragment (get_fragments($dt))
@@ -321,7 +330,7 @@ else
 			ovmerge($overlays[1], $overlays[$i]);
 		}
 
-		ovapply($base, $overlays[1]);
+		ovapply2($base, $overlays[1]);
 
 		delete_node($symbols) if (is_node_empty($symbols));
 	}
@@ -427,7 +436,7 @@ sub dtparse
 			while ($next =~ /^(\w+):$/)
 			{
 				push @newlabels, $1;
-				print("[Label: $1]\n") if ($trace);
+				print("[Label: $1]\n") if ($trace_parse);
 				$next = match($state, $next);
 			}
 			if ($next =~ /^&(\w+)$/)
@@ -897,6 +906,7 @@ sub ovstrip
 	my ($dt) = @_;
 	my @unused;
 
+	print("[ ovstrip ]\n") if ($trace_tree);
 	$cur_dt = $dt;
 	while (my ($key, $value) = each (%{$dt->{'labels'}}))
 	{
@@ -920,8 +930,38 @@ sub ovstrip
 	$cur_dt = undef;
 }
 
+# Apply fragments that target other fragments within the overlay
+sub ovapply1
+{
+	my ($ov) = @_;
+
+	die "* Cannot apply a non-overlay\n" if (!$ov->{'plugin'});
+
+	foreach my $fragment (get_fragments($ov))
+	{
+		my $overlay = get_child($fragment, '__overlay__');
+		next if (!$overlay);
+		print("[ apply fragment $fragment->[0] ]\n") if ($trace_tree);
+		my $target_node;
+		my $target = get_prop($fragment, 'target');
+		if ($target)
+		{
+			my $label = get_label_ref($target->[1]);
+			die "* Invalid target reference\n" if ($label !~ /^&(.*)/);
+			$DB::single = 1 if ($1 eq 'bno055');
+			$target_node = $ov->{'labels'}->{$1};
+			if ($target_node)
+			{
+			    # Merge properties and subnodes
+			    apply_node($ov, $target_node, $overlay);
+			    $overlay->[0] = '__dormant__';
+			}
+		}
+	}
+}
+
 # Apply an overlay to a base tree
-sub ovapply
+sub ovapply2
 {
 	my ($base, $ov) = @_;
 
@@ -936,34 +976,11 @@ sub ovapply
 
 	my $base_overrides = get_node($base, '/__overrides__');
 
-	# Apply fragments in two passes
-
-	# Pass 1: Apply fragments that target other fragments within the overlay
 	foreach my $fragment (get_fragments($ov))
 	{
 		my $overlay = get_child($fragment, '__overlay__');
 		next if (!$overlay);
-		my $target_node;
-		my $target = get_prop($fragment, 'target');
-		if ($target)
-		{
-			my $label = get_label_ref($target->[1]);
-			die "* Invalid target reference\n" if ($label !~ /^&(.*)/);
-			$target_node = $ov->{'labels'}->{$1};
-			if ($target_node)
-			{
-			    # Merge properties and subnodes
-			    apply_node($ov, $target_node, $overlay);
-			    $overlay->[0] = '__dormant__';
-			}
-		}
-	}
-
-	# Pass 2: Apply fragments that target the base dtb
-	foreach my $fragment (get_fragments($ov))
-	{
-		my $overlay = get_child($fragment, '__overlay__');
-		next if (!$overlay);
+		print("[ apply fragment $fragment->[0] to base tree]\n") if ($trace_tree);
 		my $target_node;
 		my $target = get_prop($fragment, 'target');
 		if ($target)
@@ -1038,7 +1055,7 @@ sub parse_node
 
 	$node = (get_child($parent, $node) || add_node($parent, $node)) if (!ref $node);
 
-	printf("parse_node(%s, %d ...)\n", $node->[0], $depth) if ($trace);
+	printf("parse_node(%s, %d ...)\n", $node->[0], $depth) if ($trace_parse);
 
 	# Parse the properties first
 
@@ -1072,7 +1089,7 @@ sub parse_node
 		while ($next =~ /^(\w+):$/)
 		{
 			push @childlabels, $1;
-			print("[Label: $1]\n") if ($trace);
+			print("[Label: $1]\n") if ($trace_parse);
 			$next = match($state, $next);
 		}
 
@@ -1188,13 +1205,15 @@ sub parse_node
 
 sub add_label
 {
-	my ($dt, $node, $label) = @_;
+	my ($dt, $node, $label, $move_from) = @_;
 
+	printf("[ add_label %s -> %s ]\n", $label, $node->[0]) if ($trace_tree);
 	my $old_value = map_find($dt->{'labels'}, $label);
 	if (defined $old_value)
 	{
-	    return if ($old_value == $node);
-	    die "* Label '$label' redefined\n";
+		return if ($old_value == $node);
+		die "* Label '$label' redefined\n" if ($move_from && ($old_value != $move_from));
+		@{$move_from->[3]} = grep $_ ne $label, @{$move_from->[3]};
 	}
 	map_add($dt->{'labels'}, $label, $node);
 	push @{$node->[3]}, $label;
@@ -1299,7 +1318,7 @@ sub read_tokens
 	$filepath .= '/' if ($filepath);
 
 	print("    " x $depth, $filename, "\n") if ($show_includes);
-	print("[read_tokens '$filename']\n") if ($trace);
+	print("[read_tokens '$filename']\n") if ($trace_parse);
 	print("#### Start of '$filename'\n") if ($expand && !$expand_label);
 	die "* Failed to open '$filename'\n" if ($branch
 		? !open($fh, '-|', "git show $branch:./$filename")
@@ -1452,7 +1471,7 @@ sub read_tokens
 				my $newsym = $defines->{$sym};
 				if (defined($newsym))
 				{
-					printf("['%s' -> '%s']\n", $sym, $newsym) if ($trace);
+					printf("['%s' -> '%s']\n", $sym, $newsym) if ($trace_parse);
 					$tok =~ s/\b$sym\b/$newsym/;
 				}
 			}
@@ -1476,7 +1495,7 @@ sub match
 {
 	my ($state, $match) = @_;
 	my $next = get_head($state);
-	print("[match '$match' @ $state->[1]]\n") if ($trace);
+	print("[match '$match' @ $state->[1]]\n") if ($trace_parse);
 	die "* Unexpected token '$next' - expected '$match'\n" if ($next ne $match);
 	return get_next($state);
 }
@@ -1498,7 +1517,7 @@ sub get_head
 		{
 			my $file = $head->[1];
 			$state->[2] = $file;
-			print("[file $file]\n") if ($trace);
+			print("[file $file]\n") if ($trace_parse);
 		}
 		else
 		{
@@ -1514,7 +1533,7 @@ sub remove_node
 	my ($node) = @_;
 	my $parent = $node->[4];
 
-	print("[remove_node($node->[0]\n") if ($trace);
+	printf("[ remove_node %s ]\n", $node->[0]) if ($trace_tree);
 
 	return if (!$parent);
 	$node->[4] = undef;
@@ -1544,6 +1563,7 @@ sub delete_node
 
 	return if (!$node);
 
+	print("[ delete node %s ]\n", $node->[0]) if ($trace_tree);
 	remove_node($node);
 
 	# Delete all labels attached to the node
@@ -1551,8 +1571,6 @@ sub delete_node
 	{
 		map_del($cur_dt->{'labels'}, $label);
 	}
-
-	print("  [Deleted labels]\n") if ($trace);
 
 	# Delete all label references from the properties
 	foreach my $prop (get_props($node))
@@ -1566,7 +1584,6 @@ sub delete_node
 		delete_node($node->[2]->[0]);
 	}
 
-	print("  [Deleted subnodes]\n") if ($trace);
 	return 1;
 }
 
@@ -1632,7 +1649,7 @@ sub apply_node
 	# Labels
 	foreach my $label (get_labels($src))
 	{
-		add_label($base, $dst, $label);
+		add_label($base, $dst, $label, $src); # Move, not copy
 	}
 
 	# Sub-nodes
@@ -1669,6 +1686,7 @@ sub add_node
 {
 	my ($parent, $name) = @_;
 	my $node = (ref $name) ? $name : new_node($name);
+	printf("[ add_node %s -> %s ]\n", $node->[0] || "?", $parent ? $parent->[0] : "-") if ($trace_tree);
 	$node->[4] = $parent;
 	if ($parent)
 	{
@@ -2158,7 +2176,8 @@ sub usage
 	print STDERR ("    -r      Redo command comment in named files (c.f. '-c')\n");
 	print STDERR ("    -s      Sort nodes and properties (for easy comparison)\n");
 	print STDERR ("    -S <n>  Instead of tabs, use 'n' spaces for indentation\n");
-	print STDERR ("    -t      Trace\n");
+	print STDERR ("    -t      Trace the tree changes\n");
+	print STDERR ("    -T      Trace the parsing process\n");
 	print STDERR ("    -w      Show warnings\n");
 
 	exit(1);

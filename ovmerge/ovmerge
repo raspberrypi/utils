@@ -236,6 +236,8 @@ foreach my $overlay (@ARGV)
 
 	my $model = get_prop_string($dt->{'root'}, 'model');
 
+	$cur_dt = $dt;
+
 	if ($model && $model =~ /^Raspberry Pi/ && $pi_extras)
 	{
 		# Pi firmware adds some labels and aliases that overlays
@@ -273,7 +275,6 @@ foreach my $overlay (@ARGV)
 	ovapply1($dt) if ($dt->{'plugin'});
 
 	my $exports = get_node($dt, '/__exports__');
-	$cur_dt = $dt;
 	if ($exports)
 	{
 		foreach my $symbol (@{$exports->[1]})
@@ -948,7 +949,6 @@ sub ovapply1
 		{
 			my $label = get_label_ref($target->[1]);
 			die "* Invalid target reference\n" if ($label !~ /^&(.*)/);
-			$DB::single = 1 if ($1 eq 'bno055');
 			$target_node = $ov->{'labels'}->{$1};
 			if ($target_node)
 			{
@@ -1563,7 +1563,7 @@ sub delete_node
 
 	return if (!$node);
 
-	print("[ delete node %s ]\n", $node->[0]) if ($trace_tree);
+	printf("[ delete node %s ]\n", $node->[0]) if ($trace_tree);
 	remove_node($node);
 
 	# Delete all labels attached to the node

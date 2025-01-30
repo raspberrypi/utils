@@ -256,8 +256,14 @@ static int rp1_ioctl(PIO pio, int request, void *args)
 static int rp1_pio_sm_config_xfer(PIO pio, uint sm, uint dir, uint buf_size, uint buf_count)
 {
     struct rp1_pio_sm_config_xfer_args args = { .sm = sm, .dir = dir, .buf_size = buf_size, .buf_count = buf_count };
+    struct rp1_pio_sm_config_xfer32_args args32 = { .sm = sm, .dir = dir, .buf_size = buf_size, .buf_count = buf_count };
+    int err;
     check_sm_param(sm);
-    return rp1_ioctl(pio, PIO_IOC_SM_CONFIG_XFER, &args);
+    if (buf_size > 0xffff || buf_count > 0xffff)
+        err = rp1_ioctl(pio, PIO_IOC_SM_CONFIG_XFER32, &args32);
+    else
+        err = rp1_ioctl(pio, PIO_IOC_SM_CONFIG_XFER, &args);
+    return err;
 }
 
 static int rp1_pio_sm_xfer_data(PIO pio, uint sm, uint dir, uint data_bytes, void *data)

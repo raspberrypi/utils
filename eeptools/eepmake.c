@@ -118,6 +118,16 @@ static void add_data_byte(int byte)
 	data_blob->data[data_blob->dlen++] = byte;
 }
 
+static void finish_data(void)
+{
+	if (data_blob)
+	{
+		data_blob->data = realloc(data_blob->data, data_blob->dlen);
+		data_blob = NULL;
+		data_cap = 0;
+	}
+}
+
 static int parse_string(const char *p)
 {
 	/* Read string data, stopping at escaped-doublequote */
@@ -140,6 +150,7 @@ static int parse_string(const char *p)
 			else if (c2 == '"')
 			{
 				in_string = false;
+				finish_data();
 				break;
 			}
 			else
@@ -178,7 +189,10 @@ static int parse_data(char *c)
 		{
 			int byte = *(++j);
 			if (byte == '"')
+			{
+				finish_data();
 				return 0;
+			}
 			if (!isprint(byte))
 				fatal_error("Bad character 0x%02x in simple string '%s'", byte, c);
 			add_data_byte(byte);
@@ -234,16 +248,6 @@ struct var_blob_t *add_custom_blob(void)
 	blob = &custom_blobs[custom_ct++];
 	init_blob(blob);
 	return blob;
-}
-
-static void finish_data(void)
-{
-	if (data_blob)
-	{
-		data_blob->data = realloc(data_blob->data, data_blob->dlen);
-		data_blob = NULL;
-		data_cap = 0;
-	}
 }
 
 static int parse_command(char *cmd, char *c)

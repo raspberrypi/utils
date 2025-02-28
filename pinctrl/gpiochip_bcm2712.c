@@ -321,7 +321,7 @@ static volatile uint32_t *bcm2712_pad_base(struct bcm2712_inst *inst,
         return NULL;
     }
 
-    gpio = gpio_offset + inst->pad_offset;
+    gpio += inst->pad_offset;
     *bit = (gpio % 15) * 2;
     return inst->pinmux_base + (gpio / 15);
 }

@@ -37,10 +37,11 @@ static void usage(const char * progname)
     fprintf(stderr, "\t-o <goio>        Select output GPIO pin number. Default 1\n");
     fprintf(stderr, "\t-s <us>          Set HSync width in microseconds. Default 4.7\n");
     fprintf(stderr, "\t-t <us>          Set line period in microseconds. Default 64.0\n");
-    fprintf(stderr, "\t-w <halflines>   Set VSync in half-lines when interlaced. Default 6\n");
+    fprintf(stderr, "\t-e <us>          Set EQ pulse width when interlaced. Default 0.0\n");
+    fprintf(stderr, "\t-w <halflines>   Set VSW in half-lines when interlaced. Default 6\n");
     fprintf(stderr, "\t-i | --interlace Generate serrated CSync for an interlaced mode\n");
-    fprintf(stderr, "\t-p | --pal       Equivalent to -i -s 4.7 -t 64.0 -w 5\n");
-    fprintf(stderr, "\t-n | --ntsc      Equivalent to -i -s 4.7 -t 63.56 -w 6\n");
+    fprintf(stderr, "\t-p | --pal       Equivalent to -i -s 4.7 -t 64.0 -e 2.35 -w 5\n");
+    fprintf(stderr, "\t-n | --ntsc      Equivalent to -i -s 4.7 -t 63.56 -e 2.3 -w 6\n");
 }
 
 unsigned int opt_hpos   = 0;
@@ -48,9 +49,10 @@ unsigned int opt_vpos   = 0;
 unsigned int opt_cpos   = 0;
 unsigned int opt_gpio   = 1;
 unsigned int opt_ilace  = 0;
+unsigned int opt_vsw    = 6;
 double       opt_hsw    = 4.7;
 double       opt_period = 64.0;
-double       opt_vsw    = 6;
+double       opt_eqp    = 0.0;
 
 static void setpal()
 {
@@ -58,6 +60,7 @@ static void setpal()
     opt_hsw    = 4.7;
     opt_period = 64.0;
     opt_vsw    = 5;
+    opt_eqp    = 2.35;
 }
 
 static void setntsc()
@@ -66,6 +69,7 @@ static void setntsc()
     opt_hsw    = 4.7;
     opt_period = 63.56;
     opt_vsw    = 6;
+    opt_eqp    = 2.3;
 }
 
 static int getopts(int argc, const char **argv)
@@ -108,6 +112,11 @@ static int getopts(int argc, const char **argv)
             if (--argc < 2) return -1;
             argv++;
             opt_period = atof(argv[1]);
+            break;
+        case 'e':
+            if (--argc < 2) return -1;
+            argv++;
+            opt_eqp = atof(argv[1]);
             break;
         case 'w':
             if (--argc < 2) return -1;
@@ -335,17 +344,135 @@ static int setup_pio_for_csync_ilace(PIO pio)
     return 0;
 }
 
+/*
+ * COMPOSITE SYNC (TV-STYLE) for 625/25i [-w 5] and 525/30i [-w 6] only.
+ *
+ * DPI VSYNC (GPIO2) must be a modified signal which is always active-low.
+ * It should go low for 1 or 2 scanlines, VSyncWidth/2.0 or (VSyncWidth+1)/2.0
+ * lines before Vsync-start, i.e. just after the last full active TV line
+ * (noting that RP1 DPI does not generate half-lines).
+ *
+ * This will push the image up by 1 line compared to customary DRM timings in
+ * "PAL" mode, or 2 lines in "NTSC" mode (which is arguably too low anyway),
+ * but avoids a collision between an active line and an equalizing pulse.
+ *
+ * Another wrinkle is that when the first equalizing pulse aligns with HSync,
+ * it becomes a normal-width sync pulse. This was a deliberate simplification.
+ * It is unlikely that any TV will notice or care.
+ */
+
+static int setup_pio_for_csync_tv(PIO pio)
+{
+    static const int wrap_target = 6;
+    static const int wrap = 27;
+    unsigned short instructions[] = {  /* This is mutable */
+        0x3703, //  0: wait  0 gpio, 3  side 1 [7] ; while (HSync) delay;
+        0x3083, //  1: wait  1 gpio, 3  side 1     ; do { @HSync
+        0xa7e6, //  2: mov   osr, isr   side 0 [7] ;   CSYNC: rewind sequence
+        0x2003, //  3: wait  0 gpio, 3  side 0     ;   CSYNC: HSync->CSync
+        0xb7e6, //  4: mov   osr, isr   side 1 [7] ;   delay
+        0x10c1, //  5: jmp   pin, 1     side 1     ; } while (VSync)
+        //     .wrap_target                        ; while (true) {
+        0xd042, //  6: irq   clear 2    side 1     ;   flush stale IRQ
+        0xd043, //  7: irq   clear 3    side 1     ;   flush stale IRQ
+        0xb022, //  8: mov   x, y       side 1     ;   X = EQWidth - 3
+        0x30c2, //  9: wait  1 irq, 2   side 1     ;   @midline
+        0x004a, // 10: jmp   x--, 10    side 0     ;   CSYNC: while (x--) ;
+        0x6021, // 11: out   x, 1       side 0     ;   CSYNC: next pulse broad?
+        0x002e, // 12: jmp   !x, 14     side 0     ;   CSYNC: if (broad)
+        0x20c3, // 13: wait  1 irq, 3   side 0     ;   CSYNC:   @BroadRight
+        0x7021, // 14: out   x, 1       side 1     ;   sequence not finished?
+        0x1020, // 15: jmp   !x, 0      side 1     ;   if (finished) break
+        0xd041, // 16: irq   clear 1    side 1     ;   flush stale IRQ
+        0xb022, // 17: mov   x, y       side 1     ;   X = EQWidth - 3
+        0x3083, // 18: wait  1 gpio, 3  side 1     ;   @HSync
+        0x0053, // 19: jmp   x--, 19    side 0     ;   CSYNC: while (x--) ;
+        0x6021, // 20: out   x, 1       side 0     ;   CSYNC: next pulse broad?
+        0x0037, // 21: jmp   !x, 23     side 0     ;   CSYNC: if (broad)
+        0x20c1, // 22: wait  1 irq, 1   side 0     ;   CSYNC:  @BroadLeft
+        0x7021, // 23: out   x, 1       side 1     ;   sequence not finished?
+        0x1020, // 24: jmp   !x, 0      side 1     ;   if (finished) break
+        0x10c6, // 25: jmp   pin, 6     side 1     ;   if (VSync) continue
+        0xb0e6, // 26: mov   osr, isr   side 1     ;   rewind sequence
+        0x7022, // 27: out   x, 2       side 1     ;   skip 2 bits
+        //     .wrap                               ; }
+    };
+     struct pio_program prog = {
+        .instructions = instructions,
+        .length = sizeof(instructions)/sizeof(instructions[0]),
+        .origin = -1
+    };
+    pio_sm_config cfg = pio_get_default_sm_config();
+    unsigned int i, offset;
+    unsigned int tc[3];
+    unsigned int sm = 0;
+
+    pio_claim_sm_mask(pio, 1);
+
+    /* Compute mid-line and broad-sync time constants and start the 3 "timer" SMs */
+    tc[1] = 5.0e-7 * opt_period * (double)clock_get_hz(clk_sys);
+    tc[0] = tc[1] - 1.0e-6 * opt_hsw * (double)clock_get_hz(clk_sys);
+    tc[2] = tc[1] + tc[0];
+    if (start_timers(pio, opt_hpos ? 0 : 1, tc) < 0) {
+        pio_sm_unclaim(pio, sm);
+        return -1;
+    }
+
+    /* Adapt program code according to CSync polarity; configure program */
+    pio_sm_set_enabled(pio, sm, false);
+    for (i = 0; i < prog.length; i++) {
+        if (opt_cpos)
+            instructions[i] ^= 0x1000;
+        if (!opt_hpos && (instructions[i] & 0xe07f) == 0x2003)
+            instructions[i] ^= 0x0080;
+    }
+    offset = pio_add_program(pio, &prog);
+    if (offset == PIO_ORIGIN_ANY)
+        return -1;
+
+    /* Configure pins and SM */
+    sm_config_set_wrap(&cfg, offset + wrap_target, offset + wrap);
+    sm_config_set_sideset(&cfg, 1, false, false);
+    sm_config_set_sideset_pins(&cfg, opt_gpio);
+    pio_gpio_init(pio, opt_gpio);
+    sm_config_set_jmp_pin(&cfg, 2); /* DPI VSync "helper" signal is GPIO 2 */
+    pio_sm_init(pio, sm, offset, &cfg);
+    pio_sm_set_consecutive_pindirs(pio, sm, opt_gpio, 1, true);
+
+    /* Load parameters (Vsync pattern; EQ pulse width) into ISR and Y */
+    tc[0] = (unsigned)(1.0e-6 * opt_eqp * (double) clock_get_hz(clk_sys));
+    pio_sm_put(pio, sm, (opt_vsw <= 5) ? 0x02ABFFAA : 0xAABFFEAA);
+    pio_sm_put(pio, sm, tc[0] - 3);
+    pio_sm_exec(pio, sm, pio_encode_pull(false, false));
+    pio_sm_exec(pio, sm, pio_encode_out(pio_y, 32));
+    pio_sm_exec(pio, sm, pio_encode_in(pio_y, 32));
+    pio_sm_exec(pio, sm, pio_encode_pull(false, false));
+    pio_sm_exec(pio, sm, pio_encode_out(pio_y, 32));
+    pio_sm_set_enabled(pio, sm, true);
+
+    /* Start the SM */
+    pio_sm_set_enabled(pio, sm, true);
+
+    return 0;
+}
+
 int main(int argc, const char **argv)
 {
+    int r = 0;
+
     if (getopts(argc, argv)) {
         const char * progname = (argc > 0 && argv[0]) ? argv[0] : "dpi_csync";
         usage(progname);
         return 1;
     }
 
-    int r = opt_ilace ?
-        setup_pio_for_csync_ilace(pio0) :
-        setup_pio_for_csync_prog(pio0);
+    if (!opt_ilace)
+        r = setup_pio_for_csync_prog(pio0);
+    else if (opt_eqp <= 0 || opt_vsw < 5 || opt_vsw > 6)
+        r = setup_pio_for_csync_ilace(pio0);
+    else
+        r = setup_pio_for_csync_tv(pio0);
+
     if (r) {
         fprintf(stderr, "PIO setup failed\n");
         return 1;

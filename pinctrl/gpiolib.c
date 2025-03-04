@@ -394,9 +394,10 @@ const char *gpio_get_drive_name(GPIO_DRIVE_T drive)
 
 static const GPIO_CHIP_T *gpio_find_chip(const char *name)
 {
-    const GPIO_CHIP_T *chip;
+    const GPIO_CHIP_T **chip_ptr;
 
-    for (chip = &__start_gpiochips; name && chip < &__stop_gpiochips; chip++) {
+    for (chip_ptr = &__start_gpiochips; name && chip_ptr < &__stop_gpiochips; chip_ptr++) {
+        const GPIO_CHIP_T *chip = *chip_ptr;
         if (!strcmp(name, chip->name) ||
             !strcmp(name, chip->compatible))
             return chip;

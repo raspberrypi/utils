@@ -312,6 +312,12 @@ bool eepio_atom_vinf(struct vendor_info_d *vinf)
 	return !eepio_got_error();
 }
 
+bool eepio_atom_power_supply(struct power_supply_d *power)
+{
+	eepio_blob(power, POWER_SUPPLY_SIZE);
+	return !eepio_got_error();
+}
+
 bool eepio_atom_gpio(struct gpio_map_d *map)
 {
 	eepio_blob(map, GPIO_SIZE);

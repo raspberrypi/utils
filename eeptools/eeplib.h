@@ -14,6 +14,7 @@
 #define VENDOR_SIZE 22
 #define GPIO_SIZE 30
 #define GPIO_BANK1_SIZE 20
+#define POWER_SUPPLY_SIZE 4
 #define CRC_SIZE 2
 
 #define GPIO_MIN 2
@@ -40,6 +41,7 @@ enum atom_type_t
 	ATOM_DT_TYPE = 0x0003,
 	ATOM_CUSTOM_TYPE = 0x0004,
 	ATOM_GPIO_BANK1_TYPE = 0x0005,
+	ATOM_POWER_SUPPLY_TYPE = 0x0006,
 	ATOM_HINVALID_TYPE = 0xffff
 };
 
@@ -102,6 +104,12 @@ struct gpio_map_d
 	unsigned char pins[GPIO_COUNT];
 };
 
+/* Power supply atom data */
+struct power_supply_d
+{
+	uint32_t current_supply; /* In milliamps */
+};
+
 extern struct header_t eep_header;
 extern struct atom_t eep_atom_header;
 extern uint16_t eep_atom_crc;
@@ -113,6 +121,7 @@ bool eepio_atom_start(enum atom_type_t *ptype, uint32_t *pdlen);
 bool eepio_atom_vinf(struct vendor_info_d *vinf);
 bool eepio_atom_gpio(struct gpio_map_d *map);
 bool eepio_atom_gpio_bank1(struct gpio_map_d *map);
+bool eepio_atom_power_supply(struct power_supply_d *power);
 bool eepio_atom_var(struct var_blob_t *var);
 void eepio_atom_end(void);
 void eepio_clear_error(void);

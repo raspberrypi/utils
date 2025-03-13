@@ -9,15 +9,17 @@
 static struct var_blob_t dt_atom, custom_atom;
 static struct vendor_info_d vinf;
 static struct gpio_map_d gpiomap;
+static struct power_supply_d supply;
 static const char *blob_prefix;
 
 static const char *atom_type_names[] ={
 		[ATOM_INVALID_TYPE] = "invalid",
-		[ATOM_VENDOR_TYPE] = "vendor type",
+		[ATOM_VENDOR_TYPE] = "vendor",
 		[ATOM_GPIO_TYPE] = "GPIO map",
 		[ATOM_DT_TYPE] = "DT overlay",
 		[ATOM_CUSTOM_TYPE] = "manufacturer custom data",
 		[ATOM_GPIO_BANK1_TYPE] = "GPIO map bank 1",
+		[ATOM_POWER_SUPPLY_TYPE] = "power supply",
 };
 
 static void dump_data(FILE *out, const uint8_t *data, int len)
@@ -163,6 +165,14 @@ static int read_bin(const char *in, const char *outf)
 
 			fprintf(out, "vendor \"%s\"   # length=%u\n", vinf.vstr, vinf.vslen);
 			fprintf(out, "product \"%s\"   # length=%u\n", vinf.pstr, vinf.pslen);
+			break;
+
+		case ATOM_POWER_SUPPLY_TYPE:
+			if (!eepio_atom_power_supply(&supply))
+				goto atom_read_err;
+
+			fprintf(out, "# power supply\n");
+			fprintf(out, "current_supply %u\n", supply.current_supply);
 			break;
 
 		case ATOM_GPIO_BANK1_TYPE:

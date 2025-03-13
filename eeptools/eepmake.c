@@ -13,17 +13,24 @@
 #include "eeplib.h"
 
 static struct vendor_info_d vinf;
-static struct gpio_map_d gpiomap_bank0, gpiomap_bank1;
 static struct var_blob_t dt_blob;
 struct var_blob_t *custom_blobs;
 static struct var_blob_t *data_blob;
 bool in_string;
 
-static bool product_serial_set, product_id_set, product_ver_set, vendor_set, product_set,
-	gpio_drive_set, gpio_slew_set, gpio_hysteresis_set, gpio_power_set,
+/* Common features */
+static bool product_serial_set, product_id_set, product_ver_set, vendor_set, product_set;
+static bool has_dt;
+
+/* Legacy V1 features */
+static struct gpio_map_d gpiomap_bank0, gpiomap_bank1;
+static bool has_gpio_bank0, has_gpio_bank1;
+static bool gpio_drive_set, gpio_slew_set, gpio_hysteresis_set, gpio_power_set,
 	bank1_gpio_drive_set, bank1_gpio_slew_set, bank1_gpio_hysteresis_set;
 
-static bool has_dt, has_gpio_bank0, has_gpio_bank1;
+/* HAT+ features */
+static struct power_supply_d power_supply;
+static bool current_supply_set, has_power_supply;
 
 static unsigned int custom_ct, data_cap, custom_cap;
 
@@ -36,6 +43,14 @@ static void fatal_error(const char *msg, ...)
 	printf("FATAL: ");
 	vprintf(msg, ap);
 	printf("\n");
+	exit(1);
+}
+
+static void hatplus_required(const char *cmd)
+{
+	if (hat_format >= EEP_VERSION_HATPLUS)
+		return;
+	printf("'%s' not supported on V1 HAT\n", cmd);
 	exit(1);
 }
 
@@ -98,6 +113,14 @@ static int write_binary(const char *out)
 		type = ATOM_GPIO_BANK1_TYPE;
 		eepio_atom_start(&type, NULL);
 		eepio_atom_gpio_bank1(&gpiomap_bank1);
+		eepio_atom_end();
+	}
+
+	if (has_power_supply)
+	{
+		type = ATOM_POWER_SUPPLY_TYPE;
+		eepio_atom_start(&type, NULL);
+		eepio_atom_power_supply(&power_supply);
 		eepio_atom_end();
 	}
 
@@ -325,6 +348,18 @@ static int parse_command(char *cmd, char *c)
 		vinf.pstr = malloc(256);
 		sscanf(c, "%100s \"%255[^\"]\"", cmd, vinf.pstr);
 		vinf.pslen = strlen(vinf.pstr);
+	}
+
+	/* HAT+ features */
+	else if (strcmp(cmd, "current_supply") == 0)
+	{
+		hatplus_required(cmd);
+		sscanf(c, "%100s %u", cmd, &power_supply.current_supply);
+		if (power_supply.current_supply)
+		{
+			current_supply_set = true;
+			has_power_supply = true;
+		}
 	}
 
 	/* GPIO map related part */

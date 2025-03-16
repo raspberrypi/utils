@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016-2023 Raspberry Pi Ltd.
+Copyright (c) 2016-2025 Raspberry Pi Ltd.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -384,7 +384,7 @@ static int dtoverlay_set_node_name(DTBLOB_T *dtb, int node_off,
     int err = 0;
 
     // Fixups and local-fixups both use node names, so this
-    // function must be patch them up when a node is renamed
+    // function must patch them up when a node is renamed
     // unless the fixups have already been applied.
     // Calculating a node's name is expensive, so only do it if
     // necessary. Since renaming a node can move things around,
@@ -1900,7 +1900,20 @@ int dtoverlay_override_one_target(int override_type,
         case DTOVERRIDE_BOOLEAN:
         case DTOVERRIDE_BOOLEAN_INV:
             /* This is a boolean property (present->true, absent->false) */
-            if (override_int ^ (override_type == DTOVERRIDE_BOOLEAN_INV))
+            /* Either way, any fixups will need to be deleted */
+            fdt_getprop(dtb->fdt, node_off, prop_name, &prop_len);
+            if (prop_len > 0)
+            {
+                char cell_target_loc[DTOVERLAY_MAX_PATH];
+                int path_len;
+                fdt_get_path(dtb->fdt, node_off, cell_target_loc,
+                    sizeof(cell_target_loc));
+                path_len = strlen(cell_target_loc);
+                snprintf(cell_target_loc + path_len, sizeof(cell_target_loc) - path_len, ":%s:%d", prop_name, target_off);
+                dtoverlay_delete_fixup(dtb, cell_target_loc);
+            }
+
+            if (!!override_int ^ (override_type == DTOVERRIDE_BOOLEAN_INV))
                 err = fdt_setprop(dtb->fdt, node_off, prop_name, NULL, 0);
             else
             {

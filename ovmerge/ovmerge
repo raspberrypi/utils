@@ -96,6 +96,7 @@ my $redo = 0;
 my $sort = 0;
 my $warnings = 0;
 my $no_dts = 0;
+my $no_renumber = 0;
 my $cur_dt;
 my $retcode = 0;
 my $query = 0;
@@ -195,6 +196,10 @@ while ($ARGV[0] =~ /^-/)
 	{
 		$force = 1;
 	}
+	elsif ($arg eq '-N')
+	{
+		$no_renumber = 1;
+	}
 	elsif ($arg eq '-S')
 	{
 		my $indent_spaces = shift @ARGV;
@@ -267,12 +272,14 @@ foreach my $overlay (@ARGV)
 		set_prop($overrides, 'i2c_vc', @prop);
 	}
 
-	while ($overlay =~ /\G[,:]([^=,]+)(?:=([^,]+))?/g)
+	if ($apply_params)
 	{
-		dtparam($dt, $1, defined($2) ? $2 : '');
+		while ($overlay =~ /\G[,:]([^=,]+)(?:=([^,]+))?/g)
+		{
+			dtparam($dt, $1, defined($2) ? $2 : '');
+		}
+		ovapply1($dt) if ($dt->{'plugin'});
 	}
-
-	ovapply1($dt) if ($dt->{'plugin'});
 
 	my $exports = get_node($dt, '/__exports__');
 	if ($exports)
@@ -305,7 +312,7 @@ exit(0) if (!@overlays);
 if ($overlays[0]->{'plugin'})
 {
 	# Count and renumber the fragments in the base
-	renumber_fragments($overlays[0], 0);
+	renumber_fragments($overlays[0], 0) if (!$no_renumber);
 
 	for (my $i = 1; $i < @overlays; $i++)
 	{
@@ -2171,6 +2178,7 @@ sub usage
 	print STDERR ("    -i      Show include hierarchy for each file\n");
 	print STDERR ("    -l      Like expand mode, but labels each line with source file\n");
 	print STDERR ("    -n      No .dts file header (just parsing .dtsi files)\n");
+	print STDERR ("    -N      Don't renumber overlay fragments (not guaranteed to work)\n");
 	print STDERR ("    -p      Emulate Pi firmware manipulation\n");
 	print STDERR ("    -q      Query mode (no output, just the success/failure return code)\n");
 	print STDERR ("    -r      Redo command comment in named files (c.f. '-c')\n");

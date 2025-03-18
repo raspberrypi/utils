@@ -336,6 +336,11 @@ foreach my $overlay (sort(keys(%$source)))
     {
         error("  Error ^ in overlay $overlay\n");
     }
+
+    dormant_checker($overlay);
+
+    my $checker = $overlay_checkers{$overlay};
+    ($checker->[0])->($overlay, $checker->[1], $source->{$overlay}) if ($checker);
 }
 
 if ($try_all)
@@ -353,8 +358,6 @@ if ($try_all)
             next if (system("$DTMERGE $TMPDIR/$base.dtb $MERGED_DTB $TMPDIR/$overlay.dtbo >/dev/null 2>&1") == ((-2 & 0xff) << 8));
             error("Failed to merge $overlay with $base") if (system($DTMERGE, $verbose ? ('-d') : (), "$TMPDIR/$base.dtb", $MERGED_DTB, "$TMPDIR/$overlay.dtbo") != 0);
         }
-        my $checker = $overlay_checkers{$overlay};
-        ($checker->[0])->($overlay, $checker->[1], $source->{$overlay}) if ($checker);
     }
 }
 
@@ -826,7 +829,6 @@ sub get_params
         }
     }
 
-    #print(join("\n", @lines), "\n") if ($fail);
     return ($props, sort(@params));
 }
 
@@ -866,6 +868,66 @@ sub container_checker
         {
             error("container_checker($name): parameter '$param' doesn't enable matching node");
         }
+    }
+}
+
+sub dormant_checker
+{
+    my ($overlay) = @_;
+    my $ph;
+    my $fragnum;
+    my %is_dormant;
+    my %is_wakeable;
+    my $in_overrides = 0;
+
+    die if (!open($ph, '-|', "ovmerge -N ${overlay}-overlay.dts"));
+    while (my $line = <$ph>)
+    {
+        chomp($line);
+        if ($in_overrides)
+        {
+            if ($line =~ /}/)
+            {
+                $in_overrides = 0;
+            }
+            elsif ($line =~ /^\s*([-\w]+) = (.*?;)$/)
+            {
+                my ($param, $rol) = ($1,$2);
+                while ($rol =~ /\G<(&\w+|0)>, "([^"]+)"(?:, |;)/cg)
+                {
+                    my ($ref, $override) = ($1, $2);
+                    if ($ref eq '0')
+                    {
+                        while ($override =~ /\G([-+=!])(\d+)/cg)
+                        {
+                            my ($type, $num) = ($1, $2);
+                            $is_wakeable{$num} = 1 if ($type ne '-');
+                        }
+                    }
+                    elsif ($override =~ /=$/)
+                    {
+                        $rol =~ /\G[^,;]+(?:, |;)/cg;
+                    }
+                }
+            }
+        }
+        elsif ($line =~ /\bfragment@(\d+)\s\{/)
+        {
+            $fragnum = $1;
+        }
+        elsif ($line =~ /\b__dormant__\b/)
+        {
+            $is_dormant{$fragnum} = 1;
+        }
+        elsif ($line =~ /\b__overrides__\b/)
+        {
+            $in_overrides = 1;
+        }
+    }
+
+    foreach my $frag (sort { $a <=> $b} keys(%is_dormant))
+    {
+        error("$overlay: fragment $frag is dormant and cannot be activated") if (!$is_wakeable{$frag});
     }
 }
 

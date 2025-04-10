@@ -3,9 +3,14 @@
 
 #include "gpiolib.h"
 
+#if LIBRARY_BUILD
+#define DECLARE_GPIO_CHIP(name, compatible, iface, size, data) \
+    const GPIO_CHIP_T name ## _chip = { #name, compatible, iface, size, data }
+#else
 #define DECLARE_GPIO_CHIP(name, compatible, iface, size, data) \
     const GPIO_CHIP_T name ## _chip = { #name, compatible, iface, size, data }; \
     const GPIO_CHIP_T *name ## _chip_ptr __attribute__ ((section ("gpiochips"))) __attribute__ ((used)) = &(name ## _chip)
+#endif
 
 typedef struct GPIO_CHIP_INTERFACE_ GPIO_CHIP_INTERFACE_T;
 
@@ -36,7 +41,12 @@ struct GPIO_CHIP_INTERFACE_
     const char * (*gpio_get_fsel_name)(void *priv, uint32_t gpio, GPIO_FSEL_T fsel);
 };
 
+#if LIBRARY_BUILD
+extern const GPIO_CHIP_T *const library_gpiochips[];
+extern const int library_gpiochips_count;
+#else
 extern const GPIO_CHIP_T *__start_gpiochips;
 extern const GPIO_CHIP_T *__stop_gpiochips;
+#endif
 
 #endif

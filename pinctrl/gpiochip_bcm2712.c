@@ -9,8 +9,6 @@
 #include "gpiochip.h"
 #include "util.h"
 
-#define ARRAY_SIZE(_a) (sizeof(_a)/sizeof(_a[0]))
-
 /* 2712 definitions */
 
 #define BCM2712_GIO_DATA       0x04

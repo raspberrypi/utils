@@ -8,8 +8,6 @@
 #include "gpiochip.h"
 #include "util.h"
 
-#define ARRAY_SIZE(_a) (sizeof(_a)/sizeof(_a[0]))
-
 #define BCM2835_NUM_GPIOS 54
 #define BCM2835_ALT_COUNT 6
 

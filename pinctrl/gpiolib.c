@@ -12,8 +12,6 @@
 #include "gpiochip.h"
 #include "util.h"
 
-#define ARRAY_SIZE(_a) (sizeof(_a)/sizeof(_a[0]))
-
 #define MAX_GPIO_CHIPS 8
 
 typedef struct GPIO_CHIP_INSTANCE_
@@ -394,9 +392,16 @@ const char *gpio_get_drive_name(GPIO_DRIVE_T drive)
 
 static const GPIO_CHIP_T *gpio_find_chip(const char *name)
 {
-    const GPIO_CHIP_T **chip_ptr;
+#if LIBRARY_BUILD
+    const GPIO_CHIP_T *const *start = &library_gpiochips[0];
+    const GPIO_CHIP_T *const *end = &library_gpiochips[0] + library_gpiochips_count;
+#else
+    const GPIO_CHIP_T *const *start = &__start_gpiochips;
+    const GPIO_CHIP_T *const *end = &__stop_gpiochips;
+#endif
+    const GPIO_CHIP_T *const *chip_ptr;
 
-    for (chip_ptr = &__start_gpiochips; name && chip_ptr < &__stop_gpiochips; chip_ptr++) {
+    for (chip_ptr = start; name && chip_ptr < end; chip_ptr++) {
         const GPIO_CHIP_T *chip = *chip_ptr;
         if (!strcmp(name, chip->name) ||
             !strcmp(name, chip->compatible))

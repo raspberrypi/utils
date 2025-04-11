@@ -56,7 +56,7 @@ static void print_gpio_alts_info(unsigned gpio)
     printf("\n");
 }
 
-static void usage()
+static void usage(void)
 {
     const char *name = program_name;
 

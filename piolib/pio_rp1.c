@@ -822,7 +822,7 @@ static void rp1_pio_gpio_init(PIO pio, uint pin)
     rp1_gpio_set_function(pio, pin, RP1_GPIO_FUNC_PIO);
 }
 
-PIO rp1_create_instance(PIO_CHIP_T *chip, uint index)
+static PIO rp1_create_instance(PIO_CHIP_T *chip, uint index)
 {
     char pathbuf[20];
     RP1_PIO pio = NULL;
@@ -845,7 +845,7 @@ PIO rp1_create_instance(PIO_CHIP_T *chip, uint index)
     return &pio->base;
 }
 
-int rp1_open_instance(PIO pio)
+static int rp1_open_instance(PIO pio)
 {
     RP1_PIO rp = (RP1_PIO)pio;
     int fd;
@@ -857,13 +857,13 @@ int rp1_open_instance(PIO pio)
     return 0;
 }
 
-void rp1_close_instance(PIO pio)
+static void rp1_close_instance(PIO pio)
 {
     RP1_PIO rp = (RP1_PIO)pio;
     close(rp->fd);
 }
 
-static const PIO_CHIP_T rp1_pio_chip = {
+DECLARE_PIO_CHIP(rp1) {
     .name = "rp1",
     .compatible = "raspberrypi,rp1-pio",
     .instr_count = RP1_PIO_INSTRUCTION_COUNT,
@@ -970,5 +970,3 @@ static const PIO_CHIP_T rp1_pio_chip = {
     .gpio_set_input_enabled = rp1_gpio_set_input_enabled,
     .gpio_set_drive_strength = rp1_gpio_set_drive_strength,
 };
-
-DECLARE_PIO_CHIP(rp1_pio_chip);

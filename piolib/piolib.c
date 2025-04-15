@@ -19,9 +19,6 @@
 
 #define PIO_MAX_INSTANCES 4
 
-extern PIO_CHIP_T *__start_piochips;
-extern PIO_CHIP_T *__stop_piochips;
-
 static __thread PIO __pio;
 
 static PIO pio_instances[PIO_MAX_INSTANCES];
@@ -53,6 +50,13 @@ int pio_get_index(PIO pio)
 
 int pio_init(void)
 {
+#if LIBRARY_BUILD
+    const PIO_CHIP_T *const *start = &library_piochips[0];
+    const PIO_CHIP_T *const *end = &library_piochips[0] + library_piochips_count;
+#else
+    const PIO_CHIP_T *const *start = &__start_piochips;
+    const PIO_CHIP_T *const *end = &__stop_piochips;
+#endif
     static bool initialised;
     const PIO_CHIP_T * const *p;
     uint i = 0;
@@ -61,8 +65,9 @@ int pio_init(void)
     if (initialised)
         return 0;
     num_instances = 0;
-    p = &__start_piochips;
-    while (p < &__stop_piochips && num_instances < PIO_MAX_INSTANCES)
+
+    p = start;
+    while (p < end)
     {
         PIO_CHIP_T *chip = *p;
         PIO pio = chip->create_instance(chip, i);

@@ -29,6 +29,7 @@ my @base_files = (
 
 my @extra_base_files = (
     "bcm2709-rpi-cm2",
+    "bcm2710-rpi-cm0",
     "bcm2710-rpi-2-b",
     "bcm2711-rpi-400",
     "bcm2712-rpi-500",

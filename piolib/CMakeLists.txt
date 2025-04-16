@@ -29,8 +29,8 @@ set(INCLUDE_FILES
     "pico/stdlib.h"
 )
 
-install(TARGETS pio ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS pio ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT piolib)
 foreach ( file ${INCLUDE_FILES} )
     get_filename_component( dir ${file} DIRECTORY )
-    install( FILES "include/${file}" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/piolib/${dir}" )
+    install( FILES "include/${file}" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/piolib/${dir}" COMPONENT piolib)
 endforeach()

@@ -5,7 +5,7 @@ include(GNUInstallDirs)
 #set project name
 project(eeptools)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror")
+add_compile_options(-Wall -Wextra $<$<CONFIG:Debug>:-Werror>)
 
 if (CMAKE_COMPILER_IS_GNUCC)
    add_definitions (-ffunction-sections)

@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) 2025 Raspberry Pi Ltd.
+ * All rights reserved.
+ */
+
 #include "piolib.h"
 #include "piolib_priv.h"
 

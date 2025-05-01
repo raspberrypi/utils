@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.1...3.27)
 
 project(utils)
 
+option(BUILD_SHARED "Build as shared library" OFF)
+
 # List of subsidiary CMakeLists
 add_subdirectory(dtmerge)
 add_subdirectory(eeptools)

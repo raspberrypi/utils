@@ -11,7 +11,12 @@ if (CMAKE_COMPILER_IS_GNUCC)
    add_definitions (-ffunction-sections)
 endif ()
 
-add_library (dtovl STATIC dtoverlay.c)
+if(BUILD_SHARED)
+   add_library (dtovl SHARED dtoverlay.c)
+else()
+   add_library (dtovl STATIC dtoverlay.c)
+endif()
+
 target_link_libraries(dtovl fdt)
 
 add_executable(dtmerge dtmerge.c)

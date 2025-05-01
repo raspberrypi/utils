@@ -8,7 +8,12 @@ project(pinctrl)
 
 add_compile_definitions(LIBRARY_BUILD=1)
 
-add_library(gpiolib STATIC gpiolib.c util.c library_gpiochips.c gpiochip_bcm2835.c gpiochip_bcm2712.c gpiochip_rp1.c)
+if(BUILD_SHARED)
+    add_library(gpiolib SHARED gpiolib.c util.c library_gpiochips.c gpiochip_bcm2835.c gpiochip_bcm2712.c gpiochip_rp1.c)
+else()
+    add_library(gpiolib STATIC gpiolib.c util.c library_gpiochips.c gpiochip_bcm2835.c gpiochip_bcm2712.c gpiochip_rp1.c)
+endif()
+
 target_sources(gpiolib PUBLIC gpiolib.h)
 set_target_properties(gpiolib PROPERTIES PUBLIC_HEADER gpiolib.h)
 

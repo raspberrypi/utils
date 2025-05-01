@@ -15,7 +15,12 @@ if (CMAKE_COMPILER_IS_GNUCC)
    add_definitions (-ffunction-sections)
 endif ()
 
-add_library (pio STATIC piolib.c library_piochips.c pio_rp1.c)
+if(BUILD_SHARED)
+    add_library(pio SHARED piolib.c library_piochips.c pio_rp1.c)
+else()
+    add_library(pio STATIC piolib.c library_piochips.c pio_rp1.c)
+endif()
+
 target_include_directories(pio PUBLIC include)
 
 set(INCLUDE_FILES

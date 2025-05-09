@@ -35,9 +35,9 @@ static void usage(void)
 {
     printf("Usage:\n");
     printf("    dtmerge [<options] <base dtb> <merged dtb> - [param=value] ...\n");
-    printf("        to apply a parameter to the base dtb (like dtparam)\n");
+    printf("        to apply a parameter to the base dtb, without an overlay (like dtparam)\n");
     printf("    dtmerge [<options] <base dtb> <merged dtb> <overlay dtb> [param=value] ...\n");
-    printf("        to apply an overlay with parameters (like dtoverlay)\n");
+    printf("        to apply an overlay, optionally with parameters (like dtoverlay)\n");
     printf("  where <options> is any of:\n");
     printf("    -d      Enable debug output\n");
     printf("    -h      Show this help message\n");

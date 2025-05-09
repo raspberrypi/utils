@@ -52,12 +52,17 @@ Displays help on the application.
 .TP
 .B dtmerge /boot/bcm2711-rpi-4-b.dtb out.dtb - spi=on i2c=on
 Produce a device-tree for the Raspberry Pi 4 in "out.dtb" which has the SPI and
-I2C interfaces activated.
+I2C interfaces activated. No additional device-tree overlay is applied.
 .
 .TP
 .B dtmerge /boot/bcm2710-rpi-3-b-plus.dtb out.dtb /boot/overlays/gpio-shutdown.dtbo
 Produce a device-tree for the Raspberry Pi 3+ in "out.dtb" which includes the
 GPIO shutdown overlay (with all parameters set to their default).
+.
+.TP
+.B dtmerge /boot/bcm2710-rpi-3-b-plus.dtb out.dtb /boot/overlays/gpio-shutdown.dtbo gpio_pin=5
+Produce a device-tree for the Raspberry Pi 3+ in "out.dtb" which includes the
+GPIO shutdown overlay. Additionally, it sets the gpio shutdown pin to 5.
 .
 .
 .SH SEE ALSO

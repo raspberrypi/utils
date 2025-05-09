@@ -20,9 +20,9 @@ Install the prerequisites with "sudo apt install cmake libfdt-dev" - you need at
 ```
 Usage:
     dtmerge [<options] <base dtb> <merged dtb> - [param=value] ...
-        to apply a parameter to the base dtb (like dtparam)
+        to apply a parameter to the base dtb, without an overlay (like dtparam)
     dtmerge [<options] <base dtb> <merged dtb> <overlay dtb> [param=value] ...
-        to apply an overlay with parameters (like dtoverlay)
+        to apply an overlay, optionally with parameters (like dtoverlay)
   where <options> is any of:
     -d      Enable debug output
     -h      Show this help message

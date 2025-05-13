@@ -23,6 +23,7 @@ The improvements over raspi-gpio include:
 Install the prerequisites with "sudo apt install cmake" - you need at least version 3.10 of cmake. Run the following commands, either here or in the top-level directory to build and install everything:
 
  - *cmake .*
+   N.B. Use *cmake -DBUILD_SHARED_LIBS=1 .* to build gpiolib as a shared (as opposed to static) library.
  - *make*
  - *sudo make install*
 

@@ -12,6 +12,7 @@ dtparam is a tool for applying paramaters of the base Device Tree of a live syst
 Install the prerequisites with "sudo apt install cmake libfdt-dev" - you need at least version 3.10 of cmake. Run the following commands here, or in the top-level directory to build and install all the utilities:
 
  - *cmake .*
+    N.B. Use *cmake -DBUILD_SHARED_LIBS=1 .* to build libdtovl as a shared (as opposed to static) library.
  - *make*
  - *sudo make install*
 

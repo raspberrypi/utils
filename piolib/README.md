@@ -7,6 +7,7 @@ PIOlib/libPIO is a user-space API to the rp1-pio driver, which gives access to t
 Install the prerequisites with `sudo apt install build-essential cmake` - you need at least version 3.10 of cmake. Run the following commands, either here or in the top-level directory to build and install everything:
 
 1. `cmake .` (or create a build subdirectory and run `cmake ..`)
+    N.B. Use *cmake -DBUILD_SHARED_LIBS=1 .* to build piolib as a shared (as opposed to static) library.
 2. `make`
 
 If `ls -l /dev/pio0` reports that the file is not found, you may need to update your Pi 5 firmware to one with PIO support and make sure that you are running a suitably recent kernel.

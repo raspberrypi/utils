@@ -15,8 +15,9 @@ if (CMAKE_COMPILER_IS_GNUCC)
    add_definitions (-ffunction-sections)
 endif ()
 
-add_library (pio STATIC piolib.c library_piochips.c pio_rp1.c)
+add_library (pio piolib.c library_piochips.c pio_rp1.c)
 target_include_directories(pio PUBLIC include)
+set_target_properties(pio PROPERTIES SOVERSION 0)
 
 set(INCLUDE_FILES
     "piolib.h"

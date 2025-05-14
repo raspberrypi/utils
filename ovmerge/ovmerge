@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 # Author: Phil Elwell <phil@raspberrypi.com>
-# Copyright (c) 2018-2021, Raspberry Pi (Trading) Ltd.
+# Copyright (c) 2018-2025, Raspberry Pi Ltd.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -15,10 +15,6 @@
 # 3. The names of the above-listed copyright holders may not be used
 #    to endorse or promote products derived from this software without
 #    specific prior written permission.
-#
-# ALTERNATIVELY, this software may be distributed under the terms of the
-# GNU General Public License ("GPL") version 2, as published by the Free
-# Software Foundation.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
 # IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,

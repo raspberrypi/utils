@@ -60,9 +60,12 @@ Produce a device-tree for the Raspberry Pi 3+ in "out.dtb" which includes the
 GPIO shutdown overlay (with all parameters set to their default).
 .
 .TP
-.B dtmerge /boot/bcm2710-rpi-3-b-plus.dtb out.dtb /boot/overlays/gpio-shutdown.dtbo gpio_pin=5
-Produce a device-tree for the Raspberry Pi 3+ in "out.dtb" which includes the
-GPIO shutdown overlay. Additionally, it sets the gpio shutdown pin to 5.
+.B dtmerge /boot/bcm2712-rpi-5-b.dtb out.dtb /boot/overlays/mcp2515-can0.dtbo oscillator=12000000 interrupt=25 spimaxfrequency=2000000
+Produce a device-tree for the Raspberry Pi 5 in "out.dtb" which includes the
+MCP2515 CAN bus module overlay. The overlay is configured with the following
+settings: the oscillator frequency is set to 12 MHz (depending on the quartz
+crystal used), the interrupt GPIO pin is set to 25, and the SPI frequency is
+limited to 2 MHz.
 .
 .
 .SH SEE ALSO

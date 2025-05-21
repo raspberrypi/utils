@@ -3086,7 +3086,7 @@ int dtoverlay_node_is_enabled(DTBLOB_T *dtb, int pos)
     if (pos >= 0)
     {
         const void *prop = dtoverlay_get_property(dtb, pos, "status", NULL);
-        if (prop &&
+        if (!prop ||
             ((strcmp((const char *)prop, "okay") == 0) ||
              (strcmp((const char *)prop, "ok") == 0)))
             return 1;

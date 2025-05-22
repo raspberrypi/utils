@@ -44,6 +44,52 @@ static void usage(void)
     exit(1);
 }
 
+static int apply_override(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb, char *override)
+{
+    char *param_name = override;
+    char *param_value = param_name + strcspn(param_name, "=");
+    const void *override_data;
+    int data_len;
+    int err;
+
+    if (*param_value == '=')
+    {
+        *(param_value++) = '\0';
+    }
+    else
+    {
+        /* This isn't a well-formed parameter assignment, but it can be
+        treated as an assignment of true. */
+        param_value = "true";
+    }
+
+    override_data = dtoverlay_find_override(overlay_dtb, param_name,
+                        &data_len);
+    if (override_data)
+    {
+        err = dtoverlay_apply_override(overlay_dtb, param_name,
+                        override_data, data_len,
+                        param_value);
+    }
+    else
+    {
+        override_data = dtoverlay_find_override(base_dtb, param_name, &data_len);
+        if (override_data)
+        {
+            err = dtoverlay_apply_override(base_dtb, param_name,
+                            override_data, data_len,
+                            param_value);
+        }
+        else
+        {
+            printf("* unknown param '%s'\n", param_name);
+            err = data_len;
+        }
+    }
+
+    return err;
+}
+
 int main(int argc, char **argv)
 {
     const char *base_file;
@@ -128,7 +174,6 @@ int main(int argc, char **argv)
         char *overlay_name;
         const char *new_name;
         char *p;
-        int len;
 
         strcpy(new_file, overlay_file);
         overlay_name = strrchr(new_file, '/');
@@ -142,18 +187,42 @@ int main(int argc, char **argv)
         new_name = dtoverlay_remap_overlay(overlay_name);
         if (new_name)
         {
-            if (strcmp(overlay_name, new_name))
-                dtoverlay_debug("mapped overlay '%s' to '%s'", overlay_name, new_name);
+            char *overrides = NULL;
+            int len = strlen(overlay_name);
+            int new_len = strcspn(new_name, ",");
+            if (new_name[new_len] && new_name[new_len + 1])
+            {
+                /* There are parameters */
+                overrides = strdup(new_name + new_len + 1);
+            }
+            if (new_len != len || memcmp(overlay_name, new_name, len))
+            {
+                dtoverlay_debug("mapped overlay '%s' to '%.*s'",
+                                overlay_name, new_len, new_name);
+                memcpy(overlay_name, new_name, new_len);
+            }
 
-            len = strlen(new_name);
-            memmove(overlay_name, new_name, len);
-            strcpy(overlay_name + len, ".dtbo");
+            strcpy(overlay_name + new_len, ".dtbo");
 
             overlay_dtb = dtoverlay_load_dtb(new_file, max_dtb_size);
             if (overlay_dtb)
                 err = dtoverlay_fixup_overlay(base_dtb, overlay_dtb);
             else
                 err = -1;
+
+            while (!err && overrides)
+            {
+                char *override = overrides;
+                char *end;
+                len = strcspn(override, ",");
+                end = override + len;
+                if (*end == ',' && *(end + 1))
+                    overrides = end + 1;
+                else
+                    overrides = NULL;
+                *end = '\0';
+                err = apply_override(base_dtb, overlay_dtb, override);
+            }
         }
         else
         {
@@ -164,45 +233,7 @@ int main(int argc, char **argv)
 
     while (!err && (argn < argc))
     {
-        char *param_name = argv[argn++];
-        char *param_value = param_name + strcspn(param_name, "=");
-        const void *override_data;
-        int data_len;
-
-        if (*param_value == '=')
-        {
-            *(param_value++) = '\0';
-        }
-        else
-        {
-            /* This isn't a well-formed parameter assignment, but it can be
-               treated as an assignment of true. */
-            param_value = "true";
-        }
-
-        override_data = dtoverlay_find_override(overlay_dtb, param_name,
-                                                &data_len);
-        if (override_data)
-        {
-            err = dtoverlay_apply_override(overlay_dtb, param_name,
-                                           override_data, data_len,
-                                           param_value);
-        }
-        else
-        {
-            override_data = dtoverlay_find_override(base_dtb, param_name, &data_len);
-            if (override_data)
-            {
-                err = dtoverlay_apply_override(base_dtb, param_name,
-                                               override_data, data_len,
-                                               param_value);
-            }
-            else
-            {
-                printf("* unknown param '%s'\n", param_name);
-                err = data_len;
-            }
-        }
+        err = apply_override(base_dtb, overlay_dtb, argv[argn++]);
     }
 
     if (!err && (overlay_dtb != base_dtb))

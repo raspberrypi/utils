@@ -61,23 +61,23 @@ int main(int argc, char **argv)
 
     while ((argn < argc) && (argv[argn][0] == '-'))
     {
-	const char *arg = argv[argn++];
-	if ((strcmp(arg, "-d") == 0) ||
-	    (strcmp(arg, "--debug") == 0))
-	    dtoverlay_enable_debug(1);
-	else if ((strcmp(arg, "-h") == 0) ||
-		 (strcmp(arg, "--help") == 0))
-	    usage();
-	else
-	{
-	    printf("* Unknown option '%s'\n", arg);
-	    usage();
-	}
+        const char *arg = argv[argn++];
+        if ((strcmp(arg, "-d") == 0) ||
+            (strcmp(arg, "--debug") == 0))
+            dtoverlay_enable_debug(1);
+        else if ((strcmp(arg, "-h") == 0) ||
+                 (strcmp(arg, "--help") == 0))
+            usage();
+        else
+        {
+            printf("* Unknown option '%s'\n", arg);
+            usage();
+        }
     }
 
     if (argc < (argn + 3))
     {
-	usage();
+        usage();
     }
 
     base_file = argv[argn++];
@@ -87,135 +87,135 @@ int main(int argc, char **argv)
     base_dtb = dtoverlay_load_dtb(base_file, max_dtb_size);
     if (!base_dtb)
     {
-	printf("* failed to load '%s'\n", base_file);
-	return -1;
+        printf("* failed to load '%s'\n", base_file);
+        return -1;
     }
 
     if (strnlen(overlay_file, DTOVERLAY_MAX_PATH) == DTOVERLAY_MAX_PATH)
     {
-	printf("* overlay filename too long\n");
-	return -1;
+        printf("* overlay filename too long\n");
+        return -1;
     }
 
     overlay_dir = strdup(overlay_file);
     p = strrchr(overlay_dir, '/');
     if (p)
-	*p = 0;
+        *p = 0;
     else
-	overlay_dir = ".";
+        overlay_dir = ".";
 
     compatible = dtoverlay_get_property(base_dtb,
-					dtoverlay_find_node(base_dtb, "/", 1),
-					"compatible", &compatible_len);
+                                        dtoverlay_find_node(base_dtb, "/", 1),
+                                        "compatible", &compatible_len);
     dtoverlay_init_map(overlay_dir, compatible, compatible_len);
 
     if (!dtoverlay_get_alias(base_dtb, "i2c"))
     {
-	err = dtoverlay_set_synonym(base_dtb, "i2c_arm", "i2c0");
-	err = dtoverlay_set_synonym(base_dtb, "i2c_vc", "i2c1");
-	err = dtoverlay_set_synonym(base_dtb, "i2c_baudrate", "i2c0_baudrate");
-	err = dtoverlay_set_synonym(base_dtb, "i2c_arm_baudrate", "i2c0_baudrate");
-	err = dtoverlay_set_synonym(base_dtb, "i2c_vc_baudrate", "i2c1_baudrate");
+        err = dtoverlay_set_synonym(base_dtb, "i2c_arm", "i2c0");
+        err = dtoverlay_set_synonym(base_dtb, "i2c_vc", "i2c1");
+        err = dtoverlay_set_synonym(base_dtb, "i2c_baudrate", "i2c0_baudrate");
+        err = dtoverlay_set_synonym(base_dtb, "i2c_arm_baudrate", "i2c0_baudrate");
+        err = dtoverlay_set_synonym(base_dtb, "i2c_vc_baudrate", "i2c1_baudrate");
     };
 
     if (strcmp(overlay_file, "-") == 0)
     {
-	overlay_dtb = base_dtb;
+        overlay_dtb = base_dtb;
     }
     else
     {
-	char new_file[DTOVERLAY_MAX_PATH];
-	char *overlay_name;
-	const char *new_name;
-	char *p;
-	int len;
+        char new_file[DTOVERLAY_MAX_PATH];
+        char *overlay_name;
+        const char *new_name;
+        char *p;
+        int len;
 
-	strcpy(new_file, overlay_file);
-	overlay_name = strrchr(new_file, '/');
-	if (overlay_name)
-	    overlay_name++;
-	else
-	    overlay_name = new_file;
-	p = strrchr(overlay_name, '.');
-	if (p)
-	    *p = 0;
-	new_name = dtoverlay_remap_overlay(overlay_name);
-	if (new_name)
-	{
-	    if (strcmp(overlay_name, new_name))
-		dtoverlay_debug("mapped overlay '%s' to '%s'", overlay_name, new_name);
+        strcpy(new_file, overlay_file);
+        overlay_name = strrchr(new_file, '/');
+        if (overlay_name)
+            overlay_name++;
+        else
+            overlay_name = new_file;
+        p = strrchr(overlay_name, '.');
+        if (p)
+            *p = 0;
+        new_name = dtoverlay_remap_overlay(overlay_name);
+        if (new_name)
+        {
+            if (strcmp(overlay_name, new_name))
+                dtoverlay_debug("mapped overlay '%s' to '%s'", overlay_name, new_name);
 
-	    len = strlen(new_name);
-	    memmove(overlay_name, new_name, len);
-	    strcpy(overlay_name + len, ".dtbo");
+            len = strlen(new_name);
+            memmove(overlay_name, new_name, len);
+            strcpy(overlay_name + len, ".dtbo");
 
-	    overlay_dtb = dtoverlay_load_dtb(new_file, max_dtb_size);
-	    if (overlay_dtb)
-		err = dtoverlay_fixup_overlay(base_dtb, overlay_dtb);
-	    else
-		err = -1;
-	}
-	else
-	{
-	    overlay_dtb = NULL;
-	    err = -2;
-	}
+            overlay_dtb = dtoverlay_load_dtb(new_file, max_dtb_size);
+            if (overlay_dtb)
+                err = dtoverlay_fixup_overlay(base_dtb, overlay_dtb);
+            else
+                err = -1;
+        }
+        else
+        {
+            overlay_dtb = NULL;
+            err = -2;
+        }
     }
 
     while (!err && (argn < argc))
     {
-	char *param_name = argv[argn++];
-	char *param_value = param_name + strcspn(param_name, "=");
-	const void *override_data;
-	int data_len;
+        char *param_name = argv[argn++];
+        char *param_value = param_name + strcspn(param_name, "=");
+        const void *override_data;
+        int data_len;
 
-	if (*param_value == '=')
-	{
-	    *(param_value++) = '\0';
-	}
-	else
-	{
-	    /* This isn't a well-formed parameter assignment, but it can be
-	       treated as an assignment of true. */
-	    param_value = "true";
-	}
+        if (*param_value == '=')
+        {
+            *(param_value++) = '\0';
+        }
+        else
+        {
+            /* This isn't a well-formed parameter assignment, but it can be
+               treated as an assignment of true. */
+            param_value = "true";
+        }
 
-	override_data = dtoverlay_find_override(overlay_dtb, param_name,
-						&data_len);
-	if (override_data)
-	{
-	    err = dtoverlay_apply_override(overlay_dtb, param_name,
-					   override_data, data_len,
-					   param_value);
-	}
-	else
-	{
-	    override_data = dtoverlay_find_override(base_dtb, param_name, &data_len);
-	    if (override_data)
-	    {
-		err = dtoverlay_apply_override(base_dtb, param_name,
-					       override_data, data_len,
-					       param_value);
-	    }
-	    else
-	    {
-		printf("* unknown param '%s'\n", param_name);
-		err = data_len;
-	    }
-	}
+        override_data = dtoverlay_find_override(overlay_dtb, param_name,
+                                                &data_len);
+        if (override_data)
+        {
+            err = dtoverlay_apply_override(overlay_dtb, param_name,
+                                           override_data, data_len,
+                                           param_value);
+        }
+        else
+        {
+            override_data = dtoverlay_find_override(base_dtb, param_name, &data_len);
+            if (override_data)
+            {
+                err = dtoverlay_apply_override(base_dtb, param_name,
+                                               override_data, data_len,
+                                               param_value);
+            }
+            else
+            {
+                printf("* unknown param '%s'\n", param_name);
+                err = data_len;
+            }
+        }
     }
 
     if (!err && (overlay_dtb != base_dtb))
     {
-	err = dtoverlay_merge_overlay(base_dtb, overlay_dtb);
+        err = dtoverlay_merge_overlay(base_dtb, overlay_dtb);
 
-	dtoverlay_free_dtb(overlay_dtb);
+        dtoverlay_free_dtb(overlay_dtb);
     }
 
     if (!err)
     {
-	dtoverlay_pack_dtb(base_dtb);
-	err = dtoverlay_save_dtb(base_dtb, merged_file);
+        dtoverlay_pack_dtb(base_dtb);
+        err = dtoverlay_save_dtb(base_dtb, merged_file);
     }
 
     dtoverlay_free_dtb(base_dtb);

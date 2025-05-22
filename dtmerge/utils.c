@@ -178,31 +178,31 @@ void overlay_help_print_field(OVERLAY_HELP_STATE_T *state,
 
     while (1)
     {
-	const char *line = overlay_help_field_data(state);
-	if (!line)
-	    break;
+        const char *line = overlay_help_field_data(state);
+        if (!line)
+            break;
 
-	if (label)
-	{
-	    int spaces = indent - strlen(label);
-	    if (spaces < 0)
-		spaces = 0;
+        if (label)
+        {
+            int spaces = indent - strlen(label);
+            if (spaces < 0)
+                spaces = 0;
 
-	    printf("%s%*s%s\n", label, spaces, "", line);
-	    label = NULL;
-	}
-	else if (line[0])
-	{
-	    printf("%*s%s\n", indent, "", line);
-	}
-	else if (!strip_blanks)
-	{
-	    printf("\n");
-	}
+            printf("%s%*s%s\n", label, spaces, "", line);
+            label = NULL;
+        }
+        else if (line[0])
+        {
+            printf("%*s%s\n", indent, "", line);
+        }
+        else if (!strip_blanks)
+        {
+            printf("\n");
+        }
     }
 
     if (!strip_blanks)
-	printf("\n");
+        printf("\n");
 }
 
 /* Returns the length of the line, or -1 on end of file or record */
@@ -211,41 +211,41 @@ static int overlay_help_get_line(OVERLAY_HELP_STATE_T *state)
     int line_len;
 
     if (state->line_pos >= 0)
-	return state->line_len;
+        return state->line_len;
 
   get_next_line:
     state->line_buf[sizeof(state->line_buf) - 1] = ' ';
     line_len = -1;
     if (fgets(state->line_buf, sizeof(state->line_buf), state->fp))
     {
-	// Check for overflow
+        // Check for overflow
 
-	// Strip the newline
-	line_len = strlen(state->line_buf);
-	if (line_len && (state->line_buf[line_len - 1] == '\n'))
-	{
-	    line_len--;
-	    state->line_buf[line_len] = '\0';
-	}
+        // Strip the newline
+        line_len = strlen(state->line_buf);
+        if (line_len && (state->line_buf[line_len - 1] == '\n'))
+        {
+            line_len--;
+            state->line_buf[line_len] = '\0';
+        }
     }
 
     if (state->rec_pos >= 0)
     {
-	if (line_len == 0)
-	{
-	    state->blank_count++;
-	    if (state->blank_count >= 2)
-		return -1;
-	    state->line_pos = 0;
-	    goto get_next_line;
-	}
-	else if (state->blank_count)
-	{
-	    /* Return a single blank line now - the non-empty line will be
-	       returned next time */
-	    state->blank_count = 0;
-	    return 0;
-	}
+        if (line_len == 0)
+        {
+            state->blank_count++;
+            if (state->blank_count >= 2)
+                return -1;
+            state->line_pos = 0;
+            goto get_next_line;
+        }
+        else if (state->blank_count)
+        {
+            /* Return a single blank line now - the non-empty line will be
+               returned next time */
+            state->blank_count = 0;
+            return 0;
+        }
     }
 
     state->line_len = line_len;
@@ -263,7 +263,7 @@ int run_cmd(const char *fmt, ...)
     va_end(ap);
 
     if (opt_dry_run || opt_verbose)
-	fprintf(stderr, "run_cmd: %s\n", cmd);
+        fprintf(stderr, "run_cmd: %s\n", cmd);
 
     ret = opt_dry_run ? 0 : system(cmd);
 
@@ -279,14 +279,14 @@ void free_string(const char *string)
     STRING_T *str;
 
     if (!string)
-	return;
+        return;
 
     str = (STRING_T *)(string - sizeof(STRING_T));
     if (str == allocated_strings)
     {
-	allocated_strings = str->next;
-	if (allocated_strings == str)
-	    allocated_strings = NULL;
+        allocated_strings = str->next;
+        if (allocated_strings == str)
+            allocated_strings = NULL;
     }
     str->prev->next = str->next;
     str->next->prev = str->prev;
@@ -298,14 +298,14 @@ void free_strings(void)
 {
     if (allocated_strings)
     {
-	STRING_T *str = allocated_strings;
-	do
-	{
-	    STRING_T *t = str;
-	    str = t->next;
-	    free(t);
-	} while (str != allocated_strings);
-	allocated_strings = NULL;
+        STRING_T *str = allocated_strings;
+        do
+        {
+            STRING_T *t = str;
+            str = t->next;
+            free(t);
+        } while (str != allocated_strings);
+        allocated_strings = NULL;
     }
 }
 
@@ -329,25 +329,25 @@ char *vsprintf_dup(const char *fmt, va_list ap)
     len = vsnprintf(scratch, sizeof(scratch), fmt, ap) + 1;
 
     if (len > sizeof(scratch))
-	fatal_error("Maximum string length exceeded");
+        fatal_error("Maximum string length exceeded");
 
     str = malloc(sizeof(STRING_T) + len);
     if (!str)
-	fatal_error("Out of memory");
+        fatal_error("Out of memory");
 
     memcpy(str->data, scratch, len);
     if (allocated_strings)
     {
-	str->next = allocated_strings;
-	str->prev = allocated_strings->prev;
-	str->next->prev = str;
-	str->prev->next = str;
+        str->next = allocated_strings;
+        str->prev = allocated_strings->prev;
+        str->next->prev = str;
+        str->prev->next = str;
     }
     else
     {
-	str->next = str;
-	str->prev = str;
-	allocated_strings = str;
+        str->next = str;
+        str->prev = str;
+        allocated_strings = str;
     }
 
     return str->data;
@@ -377,26 +377,26 @@ char *string_vec_add(STRING_VEC_T *vec, const char *str, int len)
     char *copy;
     if (vec->num_strings == vec->max_strings)
     {
-	if (vec->max_strings)
-	    vec->max_strings *= 2;
-	else
-	    vec->max_strings = 16;
-	vec->strings = realloc(vec->strings, vec->max_strings * sizeof(const char *));
-	if (!vec->strings)
-	    fatal_error("Out of memory");
+        if (vec->max_strings)
+            vec->max_strings *= 2;
+        else
+            vec->max_strings = 16;
+        vec->strings = realloc(vec->strings, vec->max_strings * sizeof(const char *));
+        if (!vec->strings)
+            fatal_error("Out of memory");
     }
 
     if (len)
     {
-	copy = malloc(len + 1);
-	strncpy(copy, str, len);
-	copy[len] = '\0';
+        copy = malloc(len + 1);
+        strncpy(copy, str, len);
+        copy[len] = '\0';
     }
     else
         copy = strdup(str);
 
     if (!copy)
-	fatal_error("Out of memory");
+        fatal_error("Out of memory");
 
     vec->strings[vec->num_strings++] = copy;
 
@@ -409,14 +409,14 @@ int string_vec_find(STRING_VEC_T *vec, const char *str, int len)
 
     for (i = 0; i < vec->num_strings; i++)
     {
-	if (len)
-	{
-	    if ((strncmp(vec->strings[i], str, len) == 0) &&
-		(vec->strings[i][len] == '\0'))
-		return i;
-	}
-	else if (strcmp(vec->strings[i], str) == 0)
-	    return i;
+        if (len)
+        {
+            if ((strncmp(vec->strings[i], str, len) == 0) &&
+                (vec->strings[i][len] == '\0'))
+                return i;
+        }
+        else if (strcmp(vec->strings[i], str) == 0)
+            return i;
     }
 
     return -1;
@@ -436,7 +436,7 @@ void string_vec_uninit(STRING_VEC_T *vec)
 {
     int i;
     for (i = 0; i < vec->num_strings; i++)
-	free(vec->strings[i]);
+        free(vec->strings[i]);
     free(vec->strings);
 }
 

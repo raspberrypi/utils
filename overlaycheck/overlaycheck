@@ -322,7 +322,11 @@ foreach my $overlay (sort(keys(%$source)))
         error("  Error ^ in overlay $overlay\n");
     }
     dtc_cpp("${overlay}-overlay.dts", "$TMPDIR/$overlay.dtbo");
+}
 
+foreach my $overlay (sort(keys(%$source)))
+{
+    next if ($overlay =~ /^</);
     my $overlay_props = $source->{$overlay}[0];
     my $base;
     while (my ($plat, $dts) = each(%platform_reps))

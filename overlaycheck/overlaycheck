@@ -337,6 +337,7 @@ foreach my $overlay (sort(keys(%$source)))
             last;
         }
     }
+    print("[ dtmerge $TMPDIR/$base.dtb $MERGED_DTB $TMPDIR/$overlay.dtbo ]\n") if ($verbose && $base);
     if ($base && (system($DTMERGE, "$TMPDIR/$base.dtb", $MERGED_DTB, "$TMPDIR/$overlay.dtbo") >> 8))
     {
         error("  Error ^ in overlay $overlay\n");
@@ -362,6 +363,7 @@ if ($try_all)
             next if ($overlay_props->{'bcm2711'} && $base !~ /^bcm2711/);
             next if ($overlay_props->{'bcm2712'} && $base !~ /^bcm2712/);
             next if (system("$DTMERGE $TMPDIR/$base.dtb $MERGED_DTB $TMPDIR/$overlay.dtbo >/dev/null 2>&1") == ((-2 & 0xff) << 8));
+            print("[ dtmerge $TMPDIR/$base.dtb $MERGED_DTB $TMPDIR/$overlay.dtbo ]\n") if ($verbose);
             error("Failed to merge $overlay with $base") if (system($DTMERGE, $verbose ? ('-d') : (), "$TMPDIR/$base.dtb", $MERGED_DTB, "$TMPDIR/$overlay.dtbo") != 0);
         }
     }

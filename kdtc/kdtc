@@ -91,6 +91,7 @@ if (!$out_file)
 {
     $out_file = $ARGV[1];
     $out_file = "$1.dtbo" if (!$out_file && $in_file =~ /^(.+)-overlay.dts$/);
+    $out_file = "$1.dtb" if (!$out_file && $in_file =~ /^(.+).dts$/);
     push @args, '-o', $out_file if ($out_file);
 }
 

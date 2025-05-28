@@ -229,8 +229,8 @@ echo
 audio_info
 
 echo
-echo "config.txt"
-echo "----------"
+echo "Firmware Configuration"
+echo "----------------------"
 echo
 
 #cat /boot/config.txt | egrep -v "^\s*(#|^$)"

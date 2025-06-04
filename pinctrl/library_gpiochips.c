@@ -14,6 +14,7 @@ EXTERN_GPIO_CHIP(bcm2712d0);
 EXTERN_GPIO_CHIP(bcm2712d0_aon);
 EXTERN_GPIO_CHIP(brcmstb);
 EXTERN_GPIO_CHIP(rp1);
+EXTERN_GPIO_CHIP(firmware);
 
 const GPIO_CHIP_T *const library_gpiochips[] =
 {
@@ -27,6 +28,7 @@ const GPIO_CHIP_T *const library_gpiochips[] =
     &GPIO_CHIP(bcm2712d0_aon),
     &GPIO_CHIP(brcmstb),
     &GPIO_CHIP(rp1),
+    &GPIO_CHIP(firmware),
 };
 
 const int library_gpiochips_count = ARRAY_SIZE(library_gpiochips);

@@ -31,6 +31,7 @@ Install the prerequisites with "sudo apt install cmake" - you need at least vers
 
 * `sudo pinctrl`              (Display the state of all recognised GPIOs)
 * `sudo pinctrl -p`           (Show the state of the 40-way header pins)
+* `sudo pinctrl -l`           (List the recognised GPIO controllers)
 * `sudo pinctrl 4,6 op dl`    (Make GPIOs 4 and 6 outputs, driving low)
 * `sudo pinctrl poll BT_CTS,BT_RTS`    (Monitor the levels of the Bluetooth flow control signals)
 * `pinctrl funcs 9-11`        (List the available alternate functions on GPIOs 9, 10 and 11)

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10...3.27)
 include(GNUInstallDirs)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror -pedantic")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror")
 
 #set project name
 project(pinctrl)

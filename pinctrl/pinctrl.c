@@ -69,7 +69,8 @@ static void usage(void)
     printf("Running %s with the help argument prints this help.\n", name);
     printf("%s can get and print the state of a GPIO (or all GPIOs)\n", name);
     printf("and can be used to set the function, pulls and value of a GPIO.\n");
-    printf("%s must be run as root.\n", name);
+    printf("%s must be run as root (or as a member of group 'gpio'\n", name);
+    printf("on RPiOS).\n");
     printf("Use:\n");
     printf("  %s [-p] [-v] get [GPIO]\n", name);
     printf("OR\n");
@@ -674,7 +675,7 @@ int main(int argc, char *argv[])
         if (ret)
         {
             if (ret == EACCES && geteuid())
-                printf("Must be root\n");
+                printf("Must be root (or group 'gpio' on RPiOS)\n");
             else
                 printf("Failed to mmap gpiolib - %s\n", strerror(ret));
             return -1;

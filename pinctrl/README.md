@@ -3,8 +3,11 @@
 
 pinctrl is a more powerful replacement for raspi-gpio, a tool for displaying
 and modifying the GPIO and pin muxing state of a system. It accesses the
-hardware directly, bypassing the kernel drivers, and as such requires root
-privilege (run with "sudo").
+hardware directly, bypassing the kernel drivers, and as such requires the
+necessary privilege. By default, root access is required (i.e. run with
+"sudo"), but with a suitable udev rule to change the ownership of
+/dev/gpiomem* (as found in RPiOS) this can be relaxed to group membership,
+e.g. group "gpio".
 
 The improvements over raspi-gpio include:
 

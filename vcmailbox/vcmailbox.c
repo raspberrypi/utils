@@ -74,7 +74,6 @@ static void mbox_close(int file_desc) {
   close(file_desc);
 }
 
-
 #define MAX_WORDS 256
 
 int main(int argc, char *argv[])

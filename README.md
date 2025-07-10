@@ -18,15 +18,18 @@ A collection of scripts and simple applications
 * [piolib](piolib/) - A library for accessing the Pi 5's PIO hardware.
 * [raspinfo](raspinfo/) - A short script to dump information about the Pi. Intended for
     the submission of bug reports.
+* [rpifwcrypto](rpifwcrypto/) - A command line application and library for the
+    firmware cryptography services. Intended for use with Raspberry Pi Connect and
+    secure-boot provisioner.
 * [vclog](vclog/) - A tool to get VideoCore 'assert' or 'msg' logs
     with optional -f to wait for new logs to arrive.
 
 
 **Build Instructions**
 
-Install the prerequisites with "sudo apt install cmake device-tree-compiler libfdt-dev" - you need at least version 3.10 of cmake. Run the following commands to build and install everything, or see the README files in the subdirectories to just build utilities individually:
+Install the prerequisites with "sudo apt install cmake device-tree-compiler libfdt-dev libgnutls28-dev" - you need at least version 3.10 of cmake. Run the following commands to build and install everything, or see the README files in the subdirectories to just build utilities individually:
 
  - *cmake .*
-    N.B. Use *cmake -DBUILD_SHARED_LIBS=1 .* to build the libraries in the subprojects (libdtovl, gpiolib and piolib) as shared (as opposed to static) libraries.
+    N.B. Use *cmake -DBUILD_SHARED_LIBS=1 .* to build the libraries in the subprojects (libdtovl, gpiolib, librpifwcrypto and piolib) as shared (as opposed to static) libraries.
  - *make*
  - *sudo make install*

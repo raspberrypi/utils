@@ -56,7 +56,7 @@ Follow these steps on the Raspberry Pi after installing the tools and building t
 	   70:
 	```
 	Normally, you can skip this step, and assume things are working.
-3. Flash eep file `sudo ./eepflash.sh -w -t=24c32 -a=0x50 -f=eeprom.eep`
+3. Flash eep file `sudo ./eepflash.sh -w -t=24c32 -a=50 -f=eeprom.eep`
 4. Enable EEPROM write protection, by undoing step 1 (putting back jumper, or resetting GPIO)
 
 ## String data formatting

@@ -374,8 +374,8 @@ sub dtparse
 	#   'labels' => hash of labels used in tree
 	#   'refcount' => hash of reference count of labels in tree (excluding the definition)
 	#   'includes' => array of included headers (array to preserve order)
-	#   'memreserves' => array of memreseve [base,length] pairs
-	#   'defines' => array of memreseve [base,length] pairs
+	#   'memreserves' => array of memreserve [base,length] pairs
+	#   'defines' => #define hash mapping name to value
 
 	my ($filename, $got_header) = @_;
 
@@ -538,6 +538,14 @@ sub dtdump
 		}
 		print("\n");
 	}
+	if (%{$dt->{'defines'}}) {
+		while (my ($name, $value) = each (%{$dt->{'defines'}}))
+		{
+			print("#define $name $value\n");
+		}
+		print("\n");
+	}
+
 	if (!set_empty($dt->{'memreserves'}))
 	{
 		foreach my $res (set_vals($dt->{'memreserves'}))

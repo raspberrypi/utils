@@ -24,9 +24,9 @@ usage()
 	echo "	-f=file_name --file=file_name: binary .eep file to read to/from"
 	echo "	    N.B. -f file_name and --file file_name (without =) also accepted"
 	echo "	-d= --device= i2c bus number (ex if the eeprom is on i2c-0 set -d=0)"
-	echo '	-a= --address= i2c EEPROM address (0x50 for standard HAT+/HAT, 0x51'
-	echo "	      for stackable HAT+, 0x52 for MODE0 Power HAT+, 0x53 for MODE1"
-	echo '	      Power HAT+)'
+	echo '	-a= --address= i2c EEPROM address (50 for standard HAT+/HAT, 51 for'
+	echo "	      stackable HAT+, 52 for MODE0 Power HAT+, 53 for MODE1 Power"
+	echo '	      HAT+)'
 	echo "	-t=eeprom_type --type=eeprom_type: EEPROM type to use"
 	echo "		The following EEPROM types are supported:"
 	echo "			24c32"
@@ -37,8 +37,8 @@ usage()
 	echo "			24c1024"
 	echo ""
 	echo "Example:"
-	echo "$me -w -f=crex0.1.eep -t=24c32 -d=1 -a=57"
-	echo "$me -r -f dump.eep -t=24c32 -d=1 -a=57"
+	echo "$me -w -f=crex0.1.eep -t=24c32 -d=1 -a=50"
+	echo "$me -r -f dump.eep -t=24c32 -d=1 -a=50"
 	echo ""
 }
 

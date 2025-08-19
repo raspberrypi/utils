@@ -101,6 +101,7 @@ my $trace_parse = 0;
 my $trace_tree = 0;
 my $trace_prop = '';
 my $trace_label = '';
+my $bkpt = 0;
 my $indent_str = "\t";
 
 my @redo_comments;
@@ -119,6 +120,15 @@ while ($ARGV[0] =~ /^-/)
 			usage();
 		}
 		push @cmdline, $arg, $branch;
+	}
+	elsif ($arg eq '-B')
+	{
+		$bkpt = shift @ARGV;
+		if (!defined $bkpt)
+		{
+			print STDERR ("* Breakpoint number missing\n");
+			usage();
+		}
 	}
 	elsif ($arg eq '-c')
 	{
@@ -1515,6 +1525,7 @@ sub get_next
 {
 	my ($state) = @_;
 	$state->[1]++;
+	$DB::single = 1 if ($bkpt == $state->[1]);
 	return get_head($state);
 }
 
@@ -2175,6 +2186,7 @@ sub usage
 	print STDERR ("    overlay to avoid a potential name clash.\n");
 	print STDERR ("  and <options> are any of:\n");
 	print STDERR ("    -b <branch>  Read files from specified git branch\n");
+	print STDERR ("    -B <token numer>  Set a debug breakpoint on the specified token number\n");
 	print STDERR ("    -c      Include 'redo' comment with command line (c.f. '-r')\n");
 	print STDERR ("    -e      Expand mode - list non-skipped lines in order of inclusion\n");
 	print STDERR ("    -f      Force some errors to be ignored\n");

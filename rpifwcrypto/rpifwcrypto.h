@@ -10,6 +10,7 @@ extern "C" {
 
 #define RPI_FW_CRYPTO_HMAC_MSG_MAX_SIZE   2048
 #define RPI_FW_CRYPTO_ECDSA_RESP_MAX_SIZE  128
+#define RPI_FW_CRYPTO_PUBKEY_MAX_SIZE      512
 
 /* Error codes */
 typedef enum {
@@ -92,6 +93,18 @@ int rpi_fw_crypto_ecdsa_sign(uint32_t flags, uint32_t key_id, const uint8_t *has
  */
 int rpi_fw_crypto_hmac_sha256(uint32_t flags, uint32_t key_id, const uint8_t *message, size_t message_len,
                              uint8_t *hmac);
+
+/**
+ * Get the public key for a specific OTP key
+ *
+ * @param flags Operation flags (currently unused, set to 0)
+ * @param key_id The ID of the key to use
+ * @param pubkey Output buffer for the public key
+ * @param pubkey_max_len Size of the output buffer
+ * @param pubkey_len Pointer to store the actual public key length
+ * @return 0 on success, negative error code on failure
+ */
+int rpi_fw_crypto_get_pubkey(uint32_t flags, uint32_t key_id, uint8_t *pubkey, size_t pubkey_max_len, size_t *pubkey_len);
 
 const char *rpi_fw_crypto_key_status_str(uint32_t key_status);
 

@@ -35,6 +35,11 @@ static void usage(const char *progname)
         "  hmac --in <infile> --key-id <id> [--out <outfile>] [--outform hex]\n"
         "    Calculates HMAC-SHA256 of input file (max 2KB) using the specified key\n"
         "    --outform hex: Output HMAC in hexadecimal format\n"
+        "    If --out is omitted, writes to stdout\n"
+        "\n"
+        "  pubkey --key-id <id> [--out <outfile>] [--outform hex]\n"
+        "    Retrieves the public key in DER format for the specified key\n"
+        "    --outform hex: Output public key in hexadecimal format\n"
         "    If --out is omitted, writes to stdout\n",
         progname);
     exit(1);
@@ -296,6 +301,51 @@ static int parse_key_status_args(int argc, char *argv[], int start_idx, int *out
     return 0;
 }
 
+static int cmd_pubkey(int argc, char *argv[])
+{
+    const char *outfile = NULL;
+    const char *outform = NULL;
+    int key_id = -1;
+    int i;
+    int rc;
+    uint8_t pubkey[RPI_FW_CRYPTO_PUBKEY_MAX_SIZE];
+    size_t pubkey_len;
+    const uint32_t flags = 0;
+
+    for (i = 2; i < argc; i++) {
+        if (strcmp(argv[i], "--out") == 0 && i + 1 < argc)
+            outfile = argv[++i];
+        else if (strcmp(argv[i], "--key-id") == 0 && i + 1 < argc)
+            key_id = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--outform") == 0 && i + 1 < argc)
+            outform = argv[++i];
+    }
+
+    if (key_id < 0)
+        usage(argv[0]);
+
+    rc = rpi_fw_crypto_get_pubkey(flags, key_id, pubkey, sizeof(pubkey), &pubkey_len);
+    if (rc < 0) {
+        fprintf(stderr, "Failed to get public key: %s\n", rpi_fw_crypto_strerror(rpi_fw_crypto_get_last_error()));
+        return -1;
+    }
+
+    if (outform && strcmp(outform, "hex") == 0) {
+        if (write_hex_output(outfile, pubkey, pubkey_len) < 0) {
+            perror("Failed to write public key");
+            return -1;
+        }
+    } else {
+        if (write_binary_output(outfile, pubkey, pubkey_len) < 0) {
+            perror("Failed to write public key");
+            return -1;
+        }
+    }
+
+    return 0;
+
+}
+
 int main(int argc, char *argv[])
 {
     int last_err = 0;
@@ -339,7 +389,7 @@ int main(int argc, char *argv[])
         rc = rpi_fw_crypto_set_key_status(key_id, status);
         if (rc < 0) {
             fprintf(stderr, "Failed to set key status: %s\n", rpi_fw_crypto_strerror(rc));
-            return rc;
+            goto error;
         }
         printf("Set key %u status to 0x%08x (%s)\n", key_id, status, rpi_fw_crypto_key_status_str(status));
         return 0;
@@ -354,6 +404,13 @@ int main(int argc, char *argv[])
 
     if (strcmp(argv[1], "hmac") == 0) {
         rc = cmd_hmac(argc, argv);
+        if (rc < 0)
+            goto error;
+        return 0;
+    }
+
+    if (strcmp(argv[1], "pubkey") == 0) {
+        rc = cmd_pubkey(argc, argv);
         if (rc < 0)
             goto error;
         return 0;

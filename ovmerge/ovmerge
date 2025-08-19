@@ -403,6 +403,7 @@ sub dtparse
 		$next = match($state, $next);
 		if ($type eq '#include')
 		{
+			print("[#include $next]\n") if ($trace_parse);
 			set_add($dt->{'includes'}, $next);
 			$next = match($state, $next);
 		}
@@ -1106,6 +1107,13 @@ sub parse_node
 			}
 			next;
 		}
+		elsif ($next eq '#include')
+		{
+			$next = match($state, $next);
+			set_add($cur_dt->{'includes'}, $next);
+			$next = match($state, $next);
+			next;
+		}
 
 		while ($next =~ /^(\w+):$/)
 		{
@@ -1517,7 +1525,11 @@ sub match
 	my ($state, $match) = @_;
 	my $next = get_head($state);
 	print("[match '$match' @ $state->[1]]\n") if ($trace_parse);
-	die "* Unexpected token '$next' - expected '$match'\n" if ($next ne $match);
+	if ($next ne $match)
+	{
+		$DB::single = 1;
+		die "* Unexpected token '$next' - expected '$match'\n";
+	}
 	return get_next($state);
 }
 

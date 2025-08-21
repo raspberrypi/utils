@@ -545,7 +545,7 @@ static void *bcm2712_gpio_create_instance(const GPIO_CHIP_T *chip,
     {
         size_t names_len;
         char *names = dt_read_prop(dtnode, "gpio-line-names", &names_len);
-        if (!names[0])
+        if (names && !names[0])
             flags |= FLAGS_D0;
         dt_free(names);
     }

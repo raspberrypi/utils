@@ -8,17 +8,9 @@ extern "C" {
 #define ARM_CRYPTO_KEY_STATUS_TYPE_DEVICE_PRIVATE_KEY (1 << 0)
 #define ARM_CRYPTO_KEY_STATUS_LOCKED                  (1 << 8)
 
-#define RPI_FW_CRYPTO_HMAC_MSG_MAX_SIZE 2048
-
-/* Crypto-related mailbox tags */
-typedef enum {
-    TAG_GET_CRYPTO_LAST_ERROR      = 0x0003008e,    // Get last error code
-    TAG_GET_CRYPTO_NUM_OTP_KEYS    = 0x0003008f,    // Get number of available OTP keys
-    TAG_GET_CRYPTO_KEY_STATUS      = 0x00030090,    // Get key status
-    TAG_SET_CRYPTO_KEY_STATUS      = 0x00038090,    // Set key status
-    TAG_GET_CRYPTO_ECDSA_SIGN      = 0x00030091,    // Sign data using ECDSA
-    TAG_GET_CRYPTO_HMAC_SHA256     = 0x00030092,    // Compute HMAC-SHA256
-} RPI_FW_CRYPTO_TAG;
+#define RPI_FW_CRYPTO_HMAC_MSG_MAX_SIZE   2048
+#define RPI_FW_CRYPTO_ECDSA_RESP_MAX_SIZE  128
+#define RPI_FW_CRYPTO_PUBKEY_MAX_SIZE      512
 
 /* Error codes */
 typedef enum {
@@ -64,7 +56,7 @@ int rpi_fw_crypto_set_key_status(uint32_t key_id, uint32_t status);
  *
  * @return The last error code (see RPI_FW_CRYPTO_STATUS)
  */
-int rpi_fw_crypto_get_last_error(void);
+RPI_FW_CRYPTO_STATUS rpi_fw_crypto_get_last_error(void);
 
 /**
  * Translate a firmware crypto error status to a human-readable string
@@ -72,12 +64,12 @@ int rpi_fw_crypto_get_last_error(void);
  * @param status The error code (see RPI_FW_CRYPTO_STATUS)
  * @return A constant string describing the error
  */
-const char *rpi_fw_crypto_strerror(int status);
+const char *rpi_fw_crypto_strerror(RPI_FW_CRYPTO_STATUS status);
 
 /**
  * Request an ECDSA signature from the firmware
  *
- * @param flags    Flags for the signing operation
+ * @param flags    Flags for the signing operation (currently unused, set to 0)
  * @param key_id   The ID of the key to use for signing
  * @param hash     Pointer to the hash to sign (must be 32 bytes for SHA256)
  * @param hash_len Length of the hash (should be 32)
@@ -92,15 +84,27 @@ int rpi_fw_crypto_ecdsa_sign(uint32_t flags, uint32_t key_id, const uint8_t *has
 /**
  * Calculate HMAC-SHA256 using a key in OTP
  *
- * @param key_id The ID of the key to use
  * @param flags Operation flags (currently unused, set to 0)
+ * @param key_id The ID of the key to use
  * @param message Pointer to the message to HMAC
  * @param message_len Length of the message
  * @param hmac Output buffer for the HMAC (must be 32 bytes)
  * @return 0 on success, negative error code on failure
  */
-int rpi_fw_crypto_hmac_sha256(uint32_t key_id, uint32_t flags, const uint8_t *message, size_t message_len,
+int rpi_fw_crypto_hmac_sha256(uint32_t flags, uint32_t key_id, const uint8_t *message, size_t message_len,
                              uint8_t *hmac);
+
+/**
+ * Get the public key for a specific OTP key
+ *
+ * @param flags Operation flags (currently unused, set to 0)
+ * @param key_id The ID of the key to use
+ * @param pubkey Output buffer for the public key
+ * @param pubkey_max_len Size of the output buffer
+ * @param pubkey_len Pointer to store the actual public key length
+ * @return 0 on success, negative error code on failure
+ */
+int rpi_fw_crypto_get_pubkey(uint32_t flags, uint32_t key_id, uint8_t *pubkey, size_t pubkey_max_len, size_t *pubkey_len);
 
 const char *rpi_fw_crypto_key_status_str(uint32_t key_status);
 

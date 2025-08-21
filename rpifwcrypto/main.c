@@ -11,20 +11,35 @@ static void usage(const char *progname)
 {
     fprintf(stderr,
         "Usage: %s <command> [args]\n"
+        "\n"
+        "This application provides a command line interface for the Raspberry Pi\n"
+        "firmware cryptography service. This service enables a limited set of operations to\n"
+        "be performed with keys stored in OTP without exposing the raw key to userspace.\n"
+        "\n"
         "Commands:\n"
-        "  get-num-otp-keys                 Get number of OTP keys\n"
-        "  get-key-status <key-id>          Get status of specified key\n"
+        "  get-num-otp-keys                 Gets the number of OTP keys\n"
+        "\n"
+        "  get-key-status <key-id>          Gets the status of a specified key\n"
         "     STATUS is a bitmask of the following flags:\n"
         "     - DEVICE - Key is the device unique private key\n"
         "     - LOCKED - The key cannot be read raw format. LOCKED persists until reboot.\n"
+        "\n"
         "  set-key-status <key-id> [LOCKED] Sets the status attributes for the specified key.\n"
+        "\n"
         "  sign --in <infile> --key-id <id> --alg <alg> [--out <outfile>] [--outform hex]\n"
+        "\n"
         "    Supported algorithms: ec\n"
         "    --outform hex: Output signature in hexadecimal format\n"
         "    If --out is omitted, writes to stdout\n"
+        "\n"
         "  hmac --in <infile> --key-id <id> [--out <outfile>] [--outform hex]\n"
-        "    Calculates HMAC-SHA256 of input file using specified key\n"
+        "    Calculates HMAC-SHA256 of input file (max 2KB) using the specified key\n"
         "    --outform hex: Output HMAC in hexadecimal format\n"
+        "    If --out is omitted, writes to stdout\n"
+        "\n"
+        "  pubkey --key-id <id> [--out <outfile>] [--outform hex]\n"
+        "    Retrieves the public key in DER format for the specified key\n"
+        "    --outform hex: Output public key in hexadecimal format\n"
         "    If --out is omitted, writes to stdout\n",
         progname);
     exit(1);
@@ -146,6 +161,7 @@ static int cmd_hmac(int argc, char *argv[])
     unsigned char hmac[32];
     uint8_t message[RPI_FW_CRYPTO_HMAC_MSG_MAX_SIZE];
     long file_size;
+    const uint32_t flags = 0;
 
     for (i = 2; i < argc; i++)
     {
@@ -183,7 +199,7 @@ static int cmd_hmac(int argc, char *argv[])
         goto fail_read;
 
     // Calculate HMAC-SHA256 and write the output to a file
-    rc = rpi_fw_crypto_hmac_sha256(key_id, 0, message, file_size, hmac);
+    rc = rpi_fw_crypto_hmac_sha256(flags, key_id, message, file_size, hmac);
     if (rc < 0)
         goto fail_write;
 
@@ -222,7 +238,7 @@ static int cmd_sign(int argc, char *argv[])
     unsigned char hash[SHA256_HASH_SIZE];
     unsigned char sig[128];
     size_t sig_len = 0;
-    uint32_t flags = 0;
+    const uint32_t flags = 0;
 
     for (i = 2; i < argc; i++) {
         if (strcmp(argv[i], "--in") == 0 && i + 1 < argc)
@@ -249,8 +265,10 @@ static int cmd_sign(int argc, char *argv[])
         return -1;
 
     rc = rpi_fw_crypto_ecdsa_sign(flags, (uint32_t)key_id, hash, sizeof(hash), sig, sizeof(sig), &sig_len);
-    if (rc < 0)
-        return rc;
+    if (rc < 0) {
+        fprintf(stderr, "Failed to sign data\n");
+        return -1;
+    }
 
     /* Write signature to output file */
     if (outform && strcmp(outform, "hex") == 0) {
@@ -281,6 +299,51 @@ static int parse_key_status_args(int argc, char *argv[], int start_idx, int *out
     }
     *out_status = status;
     return 0;
+}
+
+static int cmd_pubkey(int argc, char *argv[])
+{
+    const char *outfile = NULL;
+    const char *outform = NULL;
+    int key_id = -1;
+    int i;
+    int rc;
+    uint8_t pubkey[RPI_FW_CRYPTO_PUBKEY_MAX_SIZE];
+    size_t pubkey_len;
+    const uint32_t flags = 0;
+
+    for (i = 2; i < argc; i++) {
+        if (strcmp(argv[i], "--out") == 0 && i + 1 < argc)
+            outfile = argv[++i];
+        else if (strcmp(argv[i], "--key-id") == 0 && i + 1 < argc)
+            key_id = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--outform") == 0 && i + 1 < argc)
+            outform = argv[++i];
+    }
+
+    if (key_id < 0)
+        usage(argv[0]);
+
+    rc = rpi_fw_crypto_get_pubkey(flags, key_id, pubkey, sizeof(pubkey), &pubkey_len);
+    if (rc < 0) {
+        fprintf(stderr, "Failed to get public key: %s\n", rpi_fw_crypto_strerror(rpi_fw_crypto_get_last_error()));
+        return -1;
+    }
+
+    if (outform && strcmp(outform, "hex") == 0) {
+        if (write_hex_output(outfile, pubkey, pubkey_len) < 0) {
+            perror("Failed to write public key");
+            return -1;
+        }
+    } else {
+        if (write_binary_output(outfile, pubkey, pubkey_len) < 0) {
+            perror("Failed to write public key");
+            return -1;
+        }
+    }
+
+    return 0;
+
 }
 
 int main(int argc, char *argv[])
@@ -326,7 +389,7 @@ int main(int argc, char *argv[])
         rc = rpi_fw_crypto_set_key_status(key_id, status);
         if (rc < 0) {
             fprintf(stderr, "Failed to set key status: %s\n", rpi_fw_crypto_strerror(rc));
-            return rc;
+            goto error;
         }
         printf("Set key %u status to 0x%08x (%s)\n", key_id, status, rpi_fw_crypto_key_status_str(status));
         return 0;
@@ -346,11 +409,20 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    if (strcmp(argv[1], "pubkey") == 0) {
+        rc = cmd_pubkey(argc, argv);
+        if (rc < 0)
+            goto error;
+        return 0;
+    }
+
     usage(argv[0]);
     return -1;
 
 error:
+    // Check the firmware crypto error status. If set, display the human readable string.
     last_err = rpi_fw_crypto_get_last_error();
-    fprintf(stderr, "Last crypto error: %d (%s)\n", last_err, rpi_fw_crypto_strerror(last_err));
+    if (last_err != RPI_FW_CRYPTO_SUCCESS)
+        fprintf(stderr, "Last crypto error: %d (%s)\n", last_err, rpi_fw_crypto_strerror(last_err));
     return rc;
 }

@@ -26,6 +26,17 @@
 /* VideoCore mailbox error flag */
 #define VC_MAILBOX_ERROR 0x80000000
 
+/* Crypto-related mailbox tags */
+typedef enum {
+    TAG_GET_CRYPTO_LAST_ERROR      = 0x0003008e,    // Get last error code
+    TAG_GET_CRYPTO_NUM_OTP_KEYS    = 0x0003008f,    // Get number of available OTP keys
+    TAG_GET_CRYPTO_KEY_STATUS      = 0x00030090,    // Get key status
+    TAG_SET_CRYPTO_KEY_STATUS      = 0x00038090,    // Set key status
+    TAG_GET_CRYPTO_ECDSA_SIGN      = 0x00030091,    // Sign data using ECDSA
+    TAG_GET_CRYPTO_HMAC_SHA256     = 0x00030092,    // Compute HMAC-SHA256
+    TAG_GET_CRYPTO_PUBKEY          = 0x00030093,    // Get public key
+} RPI_FW_CRYPTO_TAG;
+
 /* Common header structure for firmware mailbox messages */
 struct firmware_msg_header {
     uint32_t buf_size;
@@ -39,11 +50,9 @@ struct firmware_msg_header {
 struct firmware_msg {
     struct firmware_msg_header hdr;
     uint32_t value[4];  /* Value buffer for request/response */
+    uint32_t end_tag;
 };
 
-
-// HMAC message
-#define RPI_FW_CRYPTO_HMAC_MSG_MAX_SIZE 2048
 struct firmware_hmac_msg {
     struct firmware_msg_header hdr;
     union {
@@ -59,10 +68,9 @@ struct firmware_hmac_msg {
             uint8_t hmac[32];  // HMAC-SHA256 is always 32 bytes
         } resp;
     };
+    uint32_t end_tag;
 };
 
-// ECDSA sign message
-#define ECDSA_RESP_MAX_SIZE 128
 struct firmware_ecdsa_sign_msg {
     struct firmware_msg_header hdr;
     union {
@@ -75,9 +83,27 @@ struct firmware_ecdsa_sign_msg {
         struct {
             uint32_t status;
             uint32_t length;
-            uint8_t sig[ECDSA_RESP_MAX_SIZE];
+            uint8_t sig[RPI_FW_CRYPTO_ECDSA_RESP_MAX_SIZE];
         } resp;
     };
+    uint32_t end_tag;
+};
+
+
+struct firmware_pubkey_msg {
+    struct firmware_msg_header hdr;
+    union {
+        struct {
+            uint32_t flags;
+            uint32_t key_id;
+        } pubkey;
+        struct {
+            uint32_t status;
+            uint32_t length;
+            uint8_t pubkey[RPI_FW_CRYPTO_PUBKEY_MAX_SIZE];
+        } resp;
+    };
+    uint32_t end_tag;
 };
 
 static int mbox_open(void)
@@ -99,7 +125,8 @@ static int mbox_property(int file_desc, struct firmware_msg *msg)
     if (rc < 0)
         fprintf(stderr, "ioctl_mbox_property failed: %d\n", rc);
 
-    LOG_DEBUG("msg.hdr.code: %d\n", msg->hdr.code);
+    LOG_DEBUG("msg.hdr.code: %08x\n", msg->hdr.code);
+    LOG_DEBUG("msg.hdr.buf_size: %d\n", msg->hdr.buf_size);
     LOG_DEBUG("msg.hdr.tag: %d\n", msg->hdr.tag);
     LOG_DEBUG("msg.hdr.tag_buf_size: %d\n", msg->hdr.tag_buf_size);
     LOG_DEBUG("msg.hdr.tag_req_resp_size: %d\n", msg->hdr.tag_req_resp_size);
@@ -162,10 +189,10 @@ int rpi_fw_crypto_get_key_status(uint32_t key_id, uint32_t *status)
     return RPI_FW_CRYPTO_SUCCESS;
 }
 
-int rpi_fw_crypto_get_last_error(void)
+RPI_FW_CRYPTO_STATUS rpi_fw_crypto_get_last_error(void)
 {
     int mb;
-    int rc;
+    RPI_FW_CRYPTO_STATUS rc;
     struct firmware_msg msg = {0};
 
     mb = mbox_open();
@@ -175,14 +202,15 @@ int rpi_fw_crypto_get_last_error(void)
     msg.hdr.buf_size = sizeof(msg);
     msg.hdr.tag = TAG_GET_CRYPTO_LAST_ERROR;
     msg.hdr.tag_buf_size = 4;
+    msg.end_tag = 0;
 
     rc = mbox_property(mb, &msg);
     mbox_close(mb);
 
-    return (rc < 0) ? rc : (int)msg.value[0];
+    return (rc < 0) ? RPI_FW_CRYPTO_ERROR_UNKNOWN : (RPI_FW_CRYPTO_STATUS)msg.value[0];
 }
 
-const char *rpi_fw_crypto_strerror(int status)
+const char *rpi_fw_crypto_strerror(RPI_FW_CRYPTO_STATUS status)
 {
     switch (status) {
     case RPI_FW_CRYPTO_SUCCESS:
@@ -256,6 +284,7 @@ int rpi_fw_crypto_ecdsa_sign(uint32_t flags, uint32_t key_id, const uint8_t *has
     msg.sign.key_id = key_id;
     msg.sign.length = hash_len;
     memcpy(msg.sign.hash, hash, hash_len);
+    msg.end_tag = 0;
 
     rc = mbox_property(mb, (struct firmware_msg *)&msg);
     mbox_close(mb);
@@ -272,7 +301,7 @@ int rpi_fw_crypto_ecdsa_sign(uint32_t flags, uint32_t key_id, const uint8_t *has
     return RPI_FW_CRYPTO_SUCCESS;
 }
 
-int rpi_fw_crypto_hmac_sha256(uint32_t key_id, uint32_t flags, const uint8_t *message, size_t message_len, uint8_t *hmac)
+int rpi_fw_crypto_hmac_sha256(uint32_t flags, uint32_t key_id, const uint8_t *message, size_t message_len, uint8_t *hmac)
 {
     int mb;
     int rc;
@@ -292,6 +321,7 @@ int rpi_fw_crypto_hmac_sha256(uint32_t key_id, uint32_t flags, const uint8_t *me
     msg.hmac.key_id = key_id;
     msg.hmac.length = message_len;
     memcpy(msg.hmac.message, message, message_len);
+    msg.end_tag = 0;
 
     rc = mbox_property(mb, (struct firmware_msg *)&msg);
     mbox_close(mb);
@@ -321,9 +351,46 @@ int rpi_fw_crypto_set_key_status(uint32_t key_id, uint32_t status)
     msg.hdr.tag_buf_size = 8;
     msg.value[0] = key_id;
     msg.value[1] = status;
+    msg.end_tag = 0;
 
     rc = mbox_property(mb, &msg);
     mbox_close(mb);
 
     return (rc < 0) ? rc : RPI_FW_CRYPTO_SUCCESS;
+}
+
+int rpi_fw_crypto_get_pubkey(uint32_t flags, uint32_t key_id, uint8_t *pubkey, size_t pubkey_max_len, size_t *pubkey_len)
+{
+    int mb;
+    int rc;
+    struct firmware_pubkey_msg msg = {0};
+
+    mb = mbox_open();
+    if (mb < 0)
+        return -RPI_FW_CRYPTO_ERROR_UNKNOWN;
+
+    msg.hdr.buf_size = sizeof(msg);
+    msg.hdr.tag = TAG_GET_CRYPTO_PUBKEY;
+    msg.hdr.tag_buf_size = 4 + 4 + RPI_FW_CRYPTO_PUBKEY_MAX_SIZE; // flags + key_id + pubkey
+    msg.pubkey.flags = flags;
+    msg.pubkey.key_id = key_id;
+    msg.end_tag = 0;
+
+    rc = mbox_property(mb, (struct firmware_msg *)&msg);
+    mbox_close(mb);
+
+    if (rc < 0)
+        return rc;
+
+    if (msg.resp.status & VC_MAILBOX_ERROR)
+        return -RPI_FW_CRYPTO_OPERATION_FAILED;
+
+    if (msg.resp.length > pubkey_max_len) {
+        fprintf(stderr, "msg.length %d > pubkey_max_len %ld\n", msg.resp.length, pubkey_max_len);
+        return -RPI_FW_CRYPTO_EINVAL;
+    }
+
+    memcpy(pubkey, msg.resp.pubkey, msg.resp.length);
+    *pubkey_len = msg.resp.length;
+    return RPI_FW_CRYPTO_SUCCESS;
 }

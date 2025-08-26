@@ -292,7 +292,7 @@ int rpi_fw_crypto_ecdsa_sign(uint32_t flags, uint32_t key_id, const uint8_t *has
         return rc;
 
     if (msg.resp.length > sig_max_len) {
-        fprintf(stderr, "msg.length %d > sig_max_len %ld\n", msg.resp.length, sig_max_len);
+        fprintf(stderr, "msg.length %d > sig_max_len %zd\n", msg.resp.length, sig_max_len);
         return -RPI_FW_CRYPTO_EINVAL;
     }
 
@@ -386,7 +386,7 @@ int rpi_fw_crypto_get_pubkey(uint32_t flags, uint32_t key_id, uint8_t *pubkey, s
         return -RPI_FW_CRYPTO_OPERATION_FAILED;
 
     if (msg.resp.length > pubkey_max_len) {
-        fprintf(stderr, "msg.length %d > pubkey_max_len %ld\n", msg.resp.length, pubkey_max_len);
+        fprintf(stderr, "msg.length %d > pubkey_max_len %zd\n", msg.resp.length, pubkey_max_len);
         return -RPI_FW_CRYPTO_EINVAL;
     }
 

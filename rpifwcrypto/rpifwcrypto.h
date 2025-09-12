@@ -8,9 +8,10 @@ extern "C" {
 #define ARM_CRYPTO_KEY_STATUS_TYPE_DEVICE_PRIVATE_KEY (1 << 0)
 #define ARM_CRYPTO_KEY_STATUS_LOCKED                  (1 << 8)
 
-#define RPI_FW_CRYPTO_HMAC_MSG_MAX_SIZE   2048
-#define RPI_FW_CRYPTO_ECDSA_RESP_MAX_SIZE  128
-#define RPI_FW_CRYPTO_PUBKEY_MAX_SIZE      512
+#define RPI_FW_CRYPTO_HMAC_MSG_MAX_SIZE     2048
+#define RPI_FW_CRYPTO_ECDSA_RESP_MAX_SIZE   128
+#define RPI_FW_CRYPTO_PUBLIC_KEY_MAX_SIZE   512
+#define RPI_FW_CRYPTO_PRIVATE_KEY_MAX_SIZE  1024
 
 /* Error codes */
 typedef enum {
@@ -67,7 +68,7 @@ RPI_FW_CRYPTO_STATUS rpi_fw_crypto_get_last_error(void);
 const char *rpi_fw_crypto_strerror(RPI_FW_CRYPTO_STATUS status);
 
 /**
- * Request an ECDSA signature from the firmware
+ * Request an ECDSA signature from the firmware crypto service.
  *
  * @param flags    Flags for the signing operation (currently unused, set to 0)
  * @param key_id   The ID of the key to use for signing
@@ -82,7 +83,7 @@ int rpi_fw_crypto_ecdsa_sign(uint32_t flags, uint32_t key_id, const uint8_t *has
                              uint8_t *sig, size_t sig_max_len, size_t *sig_len);
 
 /**
- * Calculate HMAC-SHA256 using a key in OTP
+ * Calculate HMAC-SHA256 using a given key id.
  *
  * @param flags Operation flags (currently unused, set to 0)
  * @param key_id The ID of the key to use
@@ -95,7 +96,7 @@ int rpi_fw_crypto_hmac_sha256(uint32_t flags, uint32_t key_id, const uint8_t *me
                              uint8_t *hmac);
 
 /**
- * Get the public key for a specific OTP key
+ * Get the public key for a given key id.
  *
  * @param flags Operation flags (currently unused, set to 0)
  * @param key_id The ID of the key to use
@@ -106,6 +107,24 @@ int rpi_fw_crypto_hmac_sha256(uint32_t flags, uint32_t key_id, const uint8_t *me
  */
 int rpi_fw_crypto_get_pubkey(uint32_t flags, uint32_t key_id, uint8_t *pubkey, size_t pubkey_max_len, size_t *pubkey_len);
 
+/**
+ * Get the private key a given key id.
+ *
+ * @param flags Operation flags (currently unused, set to 0)
+ * @param key_id The ID of the key to use
+ * @param private_key Output buffer for the private key
+ * @param private_key_max_len Size of the output buffer
+ * @param private_key_len Pointer to store the actual private key length
+ * @return 0 on success, negative error code on failure
+ */
+int rpi_fw_crypto_get_private_key(uint32_t flags, uint32_t key_id, uint8_t *private_key, size_t private_key_max_len, size_t *private_key_len);
+
+/**
+ * Convert a key status value to a human-readable string
+ *
+ * @param key_status The key status value
+ * @return A constant string describing the key status
+ */
 const char *rpi_fw_crypto_key_status_str(uint32_t key_status);
 
 #ifdef __cplusplus

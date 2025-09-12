@@ -40,6 +40,11 @@ static void usage(const char *progname)
         "  pubkey --key-id <id> [--out <outfile>] [--outform hex]\n"
         "    Retrieves the public key in DER format for the specified key\n"
         "    --outform hex: Output public key in hexadecimal format\n"
+        "    If --out is omitted, writes to stdout\n"
+        "\n"
+        "  privkey --key-id <id> [--out <outfile>] [--outform hex]\n"
+        "    Retrieves the private key for the specified key\n"
+        "    --outform hex: Output private key in hexadecimal format\n"
         "    If --out is omitted, writes to stdout\n",
         progname);
     exit(1);
@@ -308,7 +313,7 @@ static int cmd_pubkey(int argc, char *argv[])
     int key_id = -1;
     int i;
     int rc;
-    uint8_t pubkey[RPI_FW_CRYPTO_PUBKEY_MAX_SIZE];
+    uint8_t pubkey[RPI_FW_CRYPTO_PUBLIC_KEY_MAX_SIZE];
     size_t pubkey_len;
     const uint32_t flags = 0;
 
@@ -343,7 +348,50 @@ static int cmd_pubkey(int argc, char *argv[])
     }
 
     return 0;
+}
 
+static int cmd_privkey(int argc, char *argv[])
+{
+    const char *outfile = NULL;
+    const char *outform = NULL;
+    int key_id = -1;
+    int i;
+    int rc;
+    uint8_t privkey[RPI_FW_CRYPTO_PRIVATE_KEY_MAX_SIZE];
+    size_t privkey_len;
+    const uint32_t flags = 0;
+
+    for (i = 2; i < argc; i++) {
+        if (strcmp(argv[i], "--out") == 0 && i + 1 < argc)
+            outfile = argv[++i];
+        else if (strcmp(argv[i], "--key-id") == 0 && i + 1 < argc)
+            key_id = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--outform") == 0 && i + 1 < argc)
+            outform = argv[++i];
+    }
+
+    if (key_id < 0)
+        usage(argv[0]);
+
+    rc = rpi_fw_crypto_get_private_key(flags, key_id, privkey, sizeof(privkey), &privkey_len);
+    if (rc < 0) {
+        fprintf(stderr, "Failed to get private key: %s\n", rpi_fw_crypto_strerror(rpi_fw_crypto_get_last_error()));
+        return -1;
+    }
+
+    if (outform && strcmp(outform, "hex") == 0) {
+        if (write_hex_output(outfile, privkey, privkey_len) < 0) {
+            perror("Failed to write private key");
+            return -1;
+        }
+    } else {
+        if (write_binary_output(outfile, privkey, privkey_len) < 0) {
+            perror("Failed to write private key");
+            return -1;
+        }
+    }
+
+    return 0;
 }
 
 int main(int argc, char *argv[])
@@ -411,6 +459,13 @@ int main(int argc, char *argv[])
 
     if (strcmp(argv[1], "pubkey") == 0) {
         rc = cmd_pubkey(argc, argv);
+        if (rc < 0)
+            goto error;
+        return 0;
+    }
+
+    if (strcmp(argv[1], "privkey") == 0) {
+        rc = cmd_privkey(argc, argv);
         if (rc < 0)
             goto error;
         return 0;

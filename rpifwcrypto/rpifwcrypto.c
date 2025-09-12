@@ -34,7 +34,8 @@ typedef enum {
     TAG_SET_CRYPTO_KEY_STATUS      = 0x00038090,    // Set key status
     TAG_GET_CRYPTO_ECDSA_SIGN      = 0x00030091,    // Sign data using ECDSA
     TAG_GET_CRYPTO_HMAC_SHA256     = 0x00030092,    // Compute HMAC-SHA256
-    TAG_GET_CRYPTO_PUBKEY          = 0x00030093,    // Get public key
+    TAG_GET_CRYPTO_PUBLIC_KEY      = 0x00030093,    // Get public key
+    TAG_GET_CRYPTO_PRIVATE_KEY     = 0x00030094,    // Get private key
 } RPI_FW_CRYPTO_TAG;
 
 /* Common header structure for firmware mailbox messages */
@@ -89,7 +90,6 @@ struct firmware_ecdsa_sign_msg {
     uint32_t end_tag;
 };
 
-
 struct firmware_pubkey_msg {
     struct firmware_msg_header hdr;
     union {
@@ -100,7 +100,23 @@ struct firmware_pubkey_msg {
         struct {
             uint32_t status;
             uint32_t length;
-            uint8_t pubkey[RPI_FW_CRYPTO_PUBKEY_MAX_SIZE];
+            uint8_t pubkey[RPI_FW_CRYPTO_PUBLIC_KEY_MAX_SIZE];
+        } resp;
+    };
+    uint32_t end_tag;
+};
+
+struct firmware_private_key_msg {
+    struct firmware_msg_header hdr;
+    union {
+        struct {
+            uint32_t flags;
+            uint32_t key_id;
+        } private_key;
+        struct {
+            uint32_t status;
+            uint32_t length;
+            uint8_t private_key[RPI_FW_CRYPTO_PRIVATE_KEY_MAX_SIZE];
         } resp;
     };
     uint32_t end_tag;
@@ -370,8 +386,8 @@ int rpi_fw_crypto_get_pubkey(uint32_t flags, uint32_t key_id, uint8_t *pubkey, s
         return -RPI_FW_CRYPTO_ERROR_UNKNOWN;
 
     msg.hdr.buf_size = sizeof(msg);
-    msg.hdr.tag = TAG_GET_CRYPTO_PUBKEY;
-    msg.hdr.tag_buf_size = 4 + 4 + RPI_FW_CRYPTO_PUBKEY_MAX_SIZE; // flags + key_id + pubkey
+    msg.hdr.tag = TAG_GET_CRYPTO_PUBLIC_KEY;
+    msg.hdr.tag_buf_size = 4 + 4 + RPI_FW_CRYPTO_PUBLIC_KEY_MAX_SIZE; // flags + key_id + pubkey
     msg.pubkey.flags = flags;
     msg.pubkey.key_id = key_id;
     msg.end_tag = 0;
@@ -392,5 +408,41 @@ int rpi_fw_crypto_get_pubkey(uint32_t flags, uint32_t key_id, uint8_t *pubkey, s
 
     memcpy(pubkey, msg.resp.pubkey, msg.resp.length);
     *pubkey_len = msg.resp.length;
+    return RPI_FW_CRYPTO_SUCCESS;
+}
+
+int rpi_fw_crypto_get_private_key(uint32_t flags, uint32_t key_id, uint8_t *private_key, size_t private_key_max_len, size_t *private_key_len)
+{
+    int mb;
+    int rc;
+    struct firmware_private_key_msg msg = {0};
+
+    mb = mbox_open();
+    if (mb < 0)
+        return -RPI_FW_CRYPTO_ERROR_UNKNOWN;
+
+    msg.hdr.buf_size = sizeof(msg);
+    msg.hdr.tag = TAG_GET_CRYPTO_PRIVATE_KEY;
+    msg.hdr.tag_buf_size = 4 + 4 + RPI_FW_CRYPTO_PRIVATE_KEY_MAX_SIZE; // flags + key_id + private_key
+    msg.private_key.flags = flags;
+    msg.private_key.key_id = key_id;
+    msg.end_tag = 0;
+
+    rc = mbox_property(mb, (struct firmware_msg *)&msg);
+    mbox_close(mb);
+
+    if (rc < 0)
+        return rc;
+
+    if (msg.resp.status & VC_MAILBOX_ERROR)
+        return -RPI_FW_CRYPTO_OPERATION_FAILED;
+
+    if (msg.resp.length > private_key_max_len) {
+        fprintf(stderr, "msg.length %d > private_key_max_len %zd\n", msg.resp.length, private_key_max_len);
+        return -RPI_FW_CRYPTO_EINVAL;
+    }
+
+    memcpy(private_key, msg.resp.private_key, msg.resp.length);
+    *private_key_len = msg.resp.length;
     return RPI_FW_CRYPTO_SUCCESS;
 }

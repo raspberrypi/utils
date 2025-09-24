@@ -45,7 +45,13 @@ static void usage(const char *progname)
         "  privkey --key-id <id> [--out <outfile>] [--outform hex]\n"
         "    Retrieves the private key for the specified key\n"
         "    --outform hex: Output private key in hexadecimal format\n"
-        "    If --out is omitted, writes to stdout\n",
+        "    If --out is omitted, writes to stdout\n"
+        "\n"
+        "  genkey --key-id <id> --alg <alg>\n"
+        "    Generates a private key in the specified key slot\n"
+        "    Supported algorithms: ec\n"
+        "    The key-slot must be unlocked and blank\n"
+        "    Use pubkey or privkey commands to retrieve the generated key\n",
         progname);
     exit(1);
 }
@@ -394,6 +400,39 @@ static int cmd_privkey(int argc, char *argv[])
     return 0;
 }
 
+static int cmd_genkey(int argc, char *argv[])
+{
+    const char *alg = NULL;
+    int key_id = -1;
+    int i;
+    int rc;
+    const uint32_t flags = 0;
+
+    for (i = 2; i < argc; i++) {
+        if (strcmp(argv[i], "--key-id") == 0 && i + 1 < argc)
+            key_id = atoi(argv[++i]);
+        else if (strcmp(argv[i], "--alg") == 0 && i + 1 < argc)
+            alg = argv[++i];
+    }
+
+    if (key_id < 0 || !alg)
+        usage(argv[0]);
+
+    if (strcmp(alg, "ec") != 0) {
+        fprintf(stderr, "Unsupported algorithm: %s\n", alg);
+        return -1;
+    }
+
+    rc = rpi_fw_crypto_gen_ecdsa_key(flags, (uint32_t)key_id);
+    if (rc < 0) {
+        fprintf(stderr, "Failed to generate key: %s\n", rpi_fw_crypto_strerror(rpi_fw_crypto_get_last_error()));
+        return -1;
+    }
+
+    printf("Successfully generated ECDSA key in slot %d\n", key_id);
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     int last_err = 0;
@@ -466,6 +505,13 @@ int main(int argc, char *argv[])
 
     if (strcmp(argv[1], "privkey") == 0) {
         rc = cmd_privkey(argc, argv);
+        if (rc < 0)
+            goto error;
+        return 0;
+    }
+
+    if (strcmp(argv[1], "genkey") == 0) {
+        rc = cmd_genkey(argc, argv);
         if (rc < 0)
             goto error;
         return 0;

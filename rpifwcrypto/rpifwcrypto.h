@@ -24,7 +24,8 @@ typedef enum {
     RPI_FW_CRYPTO_KEY_NOT_SET = 6,         // Key is all zeros
     RPI_FW_CRYPTO_KEY_INVALID = 7,         // Invalid key type/format
     RPI_FW_CRYPTO_NOT_SUPPORTED = 8,       // Requested operation is not supported
-    RPI_FW_CRYPTO_OPERATION_FAILED = 9     // Crypto algorithm error
+    RPI_FW_CRYPTO_OPERATION_FAILED = 9,    // Crypto algorithm error
+    RPI_FW_CRYPTO_KEY_NOT_BLANK = 10,      // Key slot is not blank
 } RPI_FW_CRYPTO_STATUS;
 
 /**
@@ -126,6 +127,17 @@ int rpi_fw_crypto_get_private_key(uint32_t flags, uint32_t key_id, uint8_t *priv
  * @return A constant string describing the key status
  */
 const char *rpi_fw_crypto_key_status_str(uint32_t key_status);
+
+/**
+ * Generates an ECDSA in the specified key slot.
+ *
+ * The key-slot must be unlocked and blank.
+ *
+ * @param flags Operation flags (currently unused, set to 0)
+ * @param key_id The ID of the key to use
+ * @return 0 on success, negative error code on failure
+ */
+int rpi_fw_crypto_gen_ecdsa_key(uint32_t flags, uint32_t key_id);
 
 #ifdef __cplusplus
 }

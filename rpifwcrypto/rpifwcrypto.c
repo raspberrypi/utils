@@ -36,6 +36,7 @@ typedef enum {
     TAG_GET_CRYPTO_HMAC_SHA256     = 0x00030092,    // Compute HMAC-SHA256
     TAG_GET_CRYPTO_PUBLIC_KEY      = 0x00030093,    // Get public key
     TAG_GET_CRYPTO_PRIVATE_KEY     = 0x00030094,    // Get private key
+    TAG_GET_CRYPTO_GEN_ECDSA_KEY   = 0x00030095,    // Generate ECDSA key
 } RPI_FW_CRYPTO_TAG;
 
 /* Common header structure for firmware mailbox messages */
@@ -118,6 +119,18 @@ struct firmware_private_key_msg {
             uint32_t length;
             uint8_t private_key[RPI_FW_CRYPTO_PRIVATE_KEY_MAX_SIZE];
         } resp;
+    };
+    uint32_t end_tag;
+};
+
+struct firmware_gen_ecdsa_key_msg {
+
+    struct firmware_msg_header hdr;
+    union {
+        struct {
+            uint32_t flags;
+            uint32_t key_id;
+        } gen_ecdsa_key;
     };
     uint32_t end_tag;
 };
@@ -249,6 +262,8 @@ const char *rpi_fw_crypto_strerror(RPI_FW_CRYPTO_STATUS status)
         return "Operation not supported";
     case RPI_FW_CRYPTO_OPERATION_FAILED:
         return "Crypto algorithm error";
+    case RPI_FW_CRYPTO_KEY_NOT_BLANK:
+        return "Key slot is not blank";
     default:
         return "Unrecognized error code";
     }
@@ -445,4 +460,27 @@ int rpi_fw_crypto_get_private_key(uint32_t flags, uint32_t key_id, uint8_t *priv
     memcpy(private_key, msg.resp.private_key, msg.resp.length);
     *private_key_len = msg.resp.length;
     return RPI_FW_CRYPTO_SUCCESS;
+}
+
+int rpi_fw_crypto_gen_ecdsa_key(uint32_t flags, uint32_t key_id)
+{
+    int mb;
+    int rc;
+    struct firmware_gen_ecdsa_key_msg msg = {0};
+
+    mb = mbox_open();
+    if (mb < 0)
+        return -RPI_FW_CRYPTO_ERROR_UNKNOWN;
+
+    msg.hdr.buf_size = sizeof(msg);
+    msg.hdr.tag = TAG_GET_CRYPTO_GEN_ECDSA_KEY;
+    msg.hdr.tag_buf_size = 4 + 4; // flags + key_id
+    msg.gen_ecdsa_key.flags = flags;
+    msg.gen_ecdsa_key.key_id = key_id;
+    msg.end_tag = 0;
+
+    rc = mbox_property(mb, (struct firmware_msg *)&msg);
+    mbox_close(mb);
+
+    return (rc < 0) ? rc : RPI_FW_CRYPTO_SUCCESS;
 }

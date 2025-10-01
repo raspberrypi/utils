@@ -148,20 +148,21 @@ static void mbox_close(int file_desc)
     close(file_desc);
 }
 
-static int mbox_property(int file_desc, struct firmware_msg *msg)
+static int mbox_property(int file_desc, void *msg)
 {
+    struct firmware_msg_header *hdr = (struct firmware_msg_header *)msg;
     int rc = ioctl(file_desc, IOCTL_MBOX_PROPERTY, msg);
     if (rc < 0)
         fprintf(stderr, "ioctl_mbox_property failed: %d\n", rc);
 
-    LOG_DEBUG("msg.hdr.code: %08x\n", msg->hdr.code);
-    LOG_DEBUG("msg.hdr.buf_size: %d\n", msg->hdr.buf_size);
-    LOG_DEBUG("msg.hdr.tag: %d\n", msg->hdr.tag);
-    LOG_DEBUG("msg.hdr.tag_buf_size: %d\n", msg->hdr.tag_buf_size);
-    LOG_DEBUG("msg.hdr.tag_req_resp_size: %d\n", msg->hdr.tag_req_resp_size);
+    LOG_DEBUG("msg.hdr.code: %08x\n", hdr->code);
+    LOG_DEBUG("msg.hdr.buf_size: %d\n", hdr->buf_size);
+    LOG_DEBUG("msg.hdr.tag: %d\n", hdr->tag);
+    LOG_DEBUG("msg.hdr.tag_buf_size: %d\n", hdr->tag_buf_size);
+    LOG_DEBUG("msg.hdr.tag_req_resp_size: %d\n", hdr->tag_req_resp_size);
 
-    if (!(msg->hdr.code & VC_MAILBOX_ERROR) ||
-        !(msg->hdr.tag_req_resp_size & VC_MAILBOX_ERROR))
+    if (!(hdr->code & VC_MAILBOX_ERROR) ||
+        !(hdr->tag_req_resp_size & VC_MAILBOX_ERROR))
         return -1;
 
     return 0;

@@ -226,14 +226,14 @@ static int cmd_hmac(int argc, char *argv[])
     goto end;
 
 fail_read:
-    if (f)
-        fclose(f);
     rc = -1;
     goto end;
 fail_write:
     rc = -1;
     goto end;
 end:
+    if (f)
+        fclose(f);
     return rc;
 }
 

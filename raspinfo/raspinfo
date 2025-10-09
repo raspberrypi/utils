@@ -133,6 +133,20 @@ display_info() {
    fi
 }
 
+audio_info() {
+   aplay -l
+   echo
+   aplay -L
+   echo
+   systemctl --user status pipewire.socket pipewire.service pulseaudio.service pulseaudio.socket
+   echo
+   if command -v pactl > /dev/null; then
+      pactl info
+   else
+      echo pactl not installed
+   fi
+}
+
 OUT=raspinfo.txt
 
 rm -f $OUT
@@ -212,6 +226,13 @@ echo
 display_info
 
 echo
+echo "Audio Information"
+echo "-------------------"
+echo
+
+audio_info
+
+echo
 echo "config.txt"
 echo "----------"
 echo
@@ -258,10 +279,10 @@ echo "dmesg log"
 echo "---------"
 echo
 
-dmesg | sed -e "s/\([0-9a-fA-F]\{1,4\}:\)\{7,7\}[0-9a-fA-F]\{1,4\}/y.y.y.y.y.y.y.y/g" | sed -e "s/[0-9a-fA-F]\{1,4\}:\(:[0-9a-fA-F]\{1,4\}\)\{1,4\}/y::y.y.y.y/g" | sed -e "s/\([0-9a-fA-F]\{2,2\}\:\)\{5,5\}[0-9a-fA-F]\{2,2\}/m.m.m.m/g"
+sudo dmesg | sed -e "s/\([0-9a-fA-F]\{1,4\}:\)\{7,7\}[0-9a-fA-F]\{1,4\}/y.y.y.y.y.y.y.y/g" | sed -e "s/[0-9a-fA-F]\{1,4\}:\(:[0-9a-fA-F]\{1,4\}\)\{1,4\}/y::y.y.y.y/g" | sed -e "s/\([0-9a-fA-F]\{2,2\}\:\)\{5,5\}[0-9a-fA-F]\{2,2\}/m.m.m.m/g"
 
 
-if  grep -q "^Revision\s*:\s*[ 123][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]11[0-9a-fA-F]$" /proc/cpuinfo
+if  grep -q "^Revision\s*:\s*[ 123][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]1[13457][0-9a-fA-F]$" /proc/cpuinfo
 then
 echo
 echo "EEPROM"

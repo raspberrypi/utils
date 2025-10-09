@@ -53,8 +53,8 @@ int overlay_help_find(OVERLAY_HELP_STATE_T *state, const char *name);
 int overlay_help_find_field(OVERLAY_HELP_STATE_T *state, const char *field);
 const char *overlay_help_field_data(OVERLAY_HELP_STATE_T *state);
 void overlay_help_print_field(OVERLAY_HELP_STATE_T *state,
-			      const char *field, const char *label,
-			      int indent, int strip_blanks);
+                              const char *field, const char *label,
+                              int indent, int strip_blanks);
 
 int run_cmd(const char *fmt, ...);
 void free_string(const char *string); /* Not thread safe */

@@ -1,11 +1,13 @@
 #ifndef _UTIL_H
 #define _UTIL_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #define INVALID_ADDRESS ((uint64_t)~0)
 #define ROUND_UP(n, d) ((((n) + (d) - 1) / (d)) * (d))
 #define UNUSED(x) (void)(x)
+#define ARRAY_SIZE(_a) (sizeof(_a)/sizeof(_a[0]))
 
 typedef struct dt_subnode_iter *DT_SUBNODE_HANDLE;
 char *read_text_file(const char *fname, size_t *plen);

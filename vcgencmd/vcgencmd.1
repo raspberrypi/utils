@@ -1,3 +1,4 @@
+'\" t
 .TH VCGENCMD 1
 .
 .SH NAME
@@ -6,14 +7,7 @@ vcgencmd \- query the VideoCore for information
 .
 .SH SYNOPSIS
 .SY vcgencmd
-.OP \-t
 .IR command \ [ params ]
-.YS
-.
-.SY vcgencmd
-.B \-h
-.SY vcgencmd
-.B \-\-help
 .YS
 .
 .
@@ -21,16 +15,6 @@ vcgencmd \- query the VideoCore for information
 .B vcgencmd
 is a command line utility that can get various pieces of information
 from the VideoCore GPU on the Raspberry Pi.
-.
-.
-.SH OPTIONS
-.TP
-.B \-t
-Time how long the command takes to complete
-.
-.TP
-.BR \-h ", " \-\-help
-Show this information
 .
 .
 .SH COMMANDS
@@ -101,9 +85,9 @@ example:
 Adding the bit numbers along the top we get:
 .TS
 tab( );
-n n n n n n n n n n n n n n n n n n n .
-19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1
-0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+n n n n n n n n n n n n n n n n n n n n .
+19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0
+0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 .TE
 .IP
 From this we can see that bits 18 and 16 are set, indicating that the Pi has
@@ -283,5 +267,5 @@ VideoCore returned an error
 .
 .SH SEE ALSO
 .B [DOCS]
-https://www.raspberrypi.org/\:documentation/\:computers/\:os.html#vcgencmd
+https://www.raspberrypi.com/documentation/computers/os.html#vcgencmd
 .

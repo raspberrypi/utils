@@ -194,6 +194,7 @@ int32_t main(int32_t argc, char *argv[])
             uint32_t payload_pos;
             uint32_t payload_len;
 
+            msg.size = 0;
             payload_pos = log_copy_wrap(log_buffer, log_size,
                                         read_pos, sizeof(msg), (char *)&msg);
             payload_len = msg.size - sizeof(msg_hdr_t);

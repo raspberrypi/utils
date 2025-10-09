@@ -8,12 +8,10 @@
 #include "gpiochip.h"
 #include "util.h"
 
-#define ARRAY_SIZE(_a) (sizeof(_a)/sizeof(_a[0]))
-
 #define BCM2835_NUM_GPIOS 54
 #define BCM2835_ALT_COUNT 6
 
-#define BCM2711_NUM_GPIOS 54
+#define BCM2711_NUM_GPIOS 58
 #define BCM2711_ALT_COUNT 6
 
 /* 2835 register offsets */
@@ -38,6 +36,15 @@
 #define GPPUPPDN1    58        /* Pin pull-up/down for pins 31:16 */
 #define GPPUPPDN2    59        /* Pin pull-up/down for pins 47:32 */
 #define GPPUPPDN3    60        /* Pin pull-up/down for pins 57:48 */
+
+struct bcm2835_inst
+{
+    unsigned num_gpios;
+    volatile uint32_t *base;
+};
+
+static struct bcm2835_inst bcm2835_instance = { .num_gpios = BCM2835_NUM_GPIOS };
+static struct bcm2835_inst bcm2711_instance = { .num_gpios = BCM2711_NUM_GPIOS };
 
 static const char *bcm2835_gpio_alt_names[BCM2835_NUM_GPIOS][BCM2835_ALT_COUNT] =
 {
@@ -153,16 +160,22 @@ static const char *bcm2711_gpio_alt_names[BCM2711_NUM_GPIOS][BCM2711_ALT_COUNT] 
     { "SD0_DAT1"  , "GPCLK2"     , "PCM_FS"    , "SD1_DAT1"      , "ARM_TCK"         , "SD_CARD_LED" , },
     { "SD0_DAT2"  , "PWM0_0"     , "PCM_DIN"   , "SD1_DAT2"      , "ARM_TDI"         , 0             , },
     { "SD0_DAT3"  , "PWM0_1"     , "PCM_DOUT"  , "SD1_DAT3"      , "ARM_TMS"         , 0             , },
+
+    { "IR_IN"     , 0            , 0           , 0               , 0                 , 0             , },
+    { 0           , 0            , 0           , 0               , 0                 , 0             , },
+    { 0           , 0            , 0           , 0               , 0                 , 0             , },
+    { 0           , 0            , 0           , 0               , 0                 , 0             , },
 };
 
 static GPIO_FSEL_T bcm2835_gpio_get_fsel(void *priv, unsigned gpio)
 {
-    volatile uint32_t *base = priv;
+    struct bcm2835_inst *inst = priv;
+    volatile uint32_t *base = inst->base;
     /* GPFSEL0-5 with 10 sels per reg, 3 bits per sel (so bits 0:29 used) */
     uint32_t reg = GPFSEL0 + (gpio / 10);
     uint32_t lsb = (gpio % 10) * 3;
 
-    if (gpio < BCM2835_NUM_GPIOS)
+    if (gpio < inst->num_gpios)
     {
         switch ((base[reg] >> lsb) & 7)
         {
@@ -182,7 +195,8 @@ static GPIO_FSEL_T bcm2835_gpio_get_fsel(void *priv, unsigned gpio)
 
 static void bcm2835_gpio_set_fsel(void *priv, unsigned gpio, const GPIO_FSEL_T func)
 {
-    volatile uint32_t *base = priv;
+    struct bcm2835_inst *inst = priv;
+    volatile uint32_t *base = inst->base;
     /* GPFSEL0-5 with 10 sels per reg, 3 bits per sel (so bits 0:29 used) */
     uint32_t reg = GPFSEL0 + (gpio / 10);
     uint32_t lsb = (gpio % 10) * 3;
@@ -202,7 +216,7 @@ static void bcm2835_gpio_set_fsel(void *priv, unsigned gpio, const GPIO_FSEL_T f
         return;
     }
 
-    if (gpio < BCM2835_NUM_GPIOS)
+    if (gpio < inst->num_gpios)
         base[reg] = (base[reg] & ~(0x7 << lsb)) | (fsel << lsb);
 }
 
@@ -232,9 +246,10 @@ static void bcm2835_gpio_set_dir(void *priv, unsigned gpio, GPIO_DIR_T dir)
 
 static int bcm2835_gpio_get_level(void *priv, unsigned gpio)
 {
-    volatile uint32_t *base = priv;
+    struct bcm2835_inst *inst = priv;
+    volatile uint32_t *base = inst->base;
 
-    if (gpio >= BCM2835_NUM_GPIOS)
+    if (gpio >= inst->num_gpios)
         return -1;
 
     return (base[GPLEV0 + (gpio / 32)] >> (gpio % 32)) & 1;
@@ -250,9 +265,10 @@ GPIO_DRIVE_T bcm2835_gpio_get_drive(void *priv, unsigned gpio)
 
 static void bcm2835_gpio_set_drive(void *priv, unsigned gpio, GPIO_DRIVE_T drv)
 {
-    volatile uint32_t *base = priv;
+    struct bcm2835_inst *inst = priv;
+    volatile uint32_t *base = inst->base;
 
-    if (gpio < BCM2835_NUM_GPIOS && drv <= DRIVE_HIGH)
+    if (gpio < inst->num_gpios && drv <= DRIVE_HIGH)
         base[(drv ? GPSET0 : GPCLR0) + (gpio / 32)] = (1 << (gpio % 32));
 }
 
@@ -266,11 +282,12 @@ static GPIO_PULL_T bcm2835_gpio_get_pull(void *priv, unsigned gpio)
 
 static void bcm2835_gpio_set_pull(void *priv, unsigned gpio, GPIO_PULL_T pull)
 {
-    volatile uint32_t *base = priv;
+    struct bcm2835_inst *inst = priv;
+    volatile uint32_t *base = inst->base;
     int clkreg = GPPUDCLK0 + (gpio / 32);
     int clkbit = 1 << (gpio % 32);
 
-    if (gpio >= BCM2835_NUM_GPIOS || pull < PULL_NONE || pull > PULL_UP)
+    if (gpio >= inst->num_gpios || pull < PULL_NONE || pull > PULL_UP)
         return;
 
     base[GPPUD] = pull;
@@ -285,16 +302,18 @@ static void bcm2835_gpio_set_pull(void *priv, unsigned gpio, GPIO_PULL_T pull)
 
 static const char *bcm2835_gpio_get_name(void *priv, unsigned gpio)
 {
+    struct bcm2835_inst *inst = priv;
     static char name_buf[16];
-    UNUSED(priv);
+    if (gpio >= inst->num_gpios)
+        return NULL;
     sprintf(name_buf, "GPIO%d", gpio);
     return name_buf;
 }
 
 static const char *bcm2835_gpio_get_fsel_name(void *priv, unsigned gpio, GPIO_FSEL_T fsel)
 {
+    struct bcm2835_inst *inst = priv;
     const char *name = NULL;
-    UNUSED(priv);
     switch (fsel)
     {
     case GPIO_FSEL_INPUT:
@@ -309,7 +328,7 @@ static const char *bcm2835_gpio_get_fsel_name(void *priv, unsigned gpio, GPIO_FS
     case GPIO_FSEL_FUNC3:
     case GPIO_FSEL_FUNC4:
     case GPIO_FSEL_FUNC5:
-        if (gpio < BCM2835_NUM_GPIOS)
+        if (gpio < inst->num_gpios)
         {
             name = bcm2835_gpio_alt_names[gpio][fsel];
             if (!name)
@@ -324,7 +343,8 @@ static const char *bcm2835_gpio_get_fsel_name(void *priv, unsigned gpio, GPIO_FS
 
 static GPIO_PULL_T bcm2711_gpio_get_pull(void *priv, unsigned gpio)
 {
-    volatile uint32_t *base = priv;
+    struct bcm2835_inst *inst = priv;
+    volatile uint32_t *base = inst->base;
     int reg = GPPUPPDN0 + (gpio / 16);
     int lsb = (gpio % 16) * 2;
 
@@ -343,7 +363,8 @@ static GPIO_PULL_T bcm2711_gpio_get_pull(void *priv, unsigned gpio)
 
 static void bcm2711_gpio_set_pull(void *priv, unsigned gpio, GPIO_PULL_T pull)
 {
-    volatile uint32_t *base = priv;
+    struct bcm2835_inst *inst = priv;
+    volatile uint32_t *base = inst->base;
     int reg = GPPUPPDN0 + (gpio / 16);
     int lsb = (gpio % 16) * 2;
     int pull_val;
@@ -371,8 +392,8 @@ static void bcm2711_gpio_set_pull(void *priv, unsigned gpio, GPIO_PULL_T pull)
 
 static const char *bcm2711_gpio_get_fsel_name(void *priv, unsigned gpio, GPIO_FSEL_T fsel)
 {
+    struct bcm2835_inst *inst = priv;
     const char *name = NULL;
-    UNUSED(priv);
     switch (fsel)
     {
     case GPIO_FSEL_INPUT:
@@ -387,7 +408,7 @@ static const char *bcm2711_gpio_get_fsel_name(void *priv, unsigned gpio, GPIO_FS
     case GPIO_FSEL_FUNC3:
     case GPIO_FSEL_FUNC4:
     case GPIO_FSEL_FUNC5:
-        if (gpio < BCM2711_NUM_GPIOS)
+        if (gpio < inst->num_gpios)
         {
             name = bcm2711_gpio_alt_names[gpio][fsel];
             if (!name)
@@ -403,20 +424,22 @@ static const char *bcm2711_gpio_get_fsel_name(void *priv, unsigned gpio, GPIO_FS
 static void *bcm2835_gpio_create_instance(const GPIO_CHIP_T *chip,
                                           const char *dtnode)
 {
+    UNUSED(chip);
     UNUSED(dtnode);
-    return (void *)chip;
+    return &bcm2835_instance;
 }
 
 static int bcm2835_gpio_count(void *priv)
 {
-    UNUSED(priv);
-    return BCM2835_NUM_GPIOS;
+    struct bcm2835_inst *inst = priv;
+    return inst->num_gpios;
 }
 
 static void *bcm2835_gpio_probe_instance(void *priv, volatile uint32_t *base)
 {
-    UNUSED(priv);
-    return (void *)base;
+    struct bcm2835_inst *inst = priv;
+    inst->base = base;
+    return priv;
 }
 
 static const GPIO_CHIP_INTERFACE_T bcm2835_gpio_interface =
@@ -440,9 +463,17 @@ static const GPIO_CHIP_INTERFACE_T bcm2835_gpio_interface =
 DECLARE_GPIO_CHIP(bcm2835, "brcm,bcm2835-gpio", &bcm2835_gpio_interface,
                   0x30000, 0);
 
+static void *bcm2711_gpio_create_instance(const GPIO_CHIP_T *chip,
+                                          const char *dtnode)
+{
+    UNUSED(chip);
+    UNUSED(dtnode);
+    return &bcm2711_instance;
+}
+
 static const GPIO_CHIP_INTERFACE_T bcm2711_gpio_interface =
 {
-    .gpio_create_instance = bcm2835_gpio_create_instance,
+    .gpio_create_instance = bcm2711_gpio_create_instance,
     .gpio_count = bcm2835_gpio_count,
     .gpio_probe_instance = bcm2835_gpio_probe_instance,
     .gpio_get_fsel = bcm2835_gpio_get_fsel,

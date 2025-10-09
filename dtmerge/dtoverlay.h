@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016 Raspberry Pi (Trading) Ltd.
+Copyright (c) 2016-2023 Raspberry Pi Ltd.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -49,43 +49,43 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 typedef enum
 {
-   DTOVERLAY_ERROR,
-   DTOVERLAY_DEBUG,
-   DTOVERLAY_WARN, // Append to preserve backwards compatibility
+    DTOVERLAY_ERROR,
+    DTOVERLAY_DEBUG,
+    DTOVERLAY_WARN, // Append to preserve backwards compatibility
 } dtoverlay_logging_type_t;
 
 typedef struct dtoverlay_struct
 {
-   const char *param;
-   int len;
-   const char *b;
+    const char *param;
+    int len;
+    const char *b;
 } DTOVERLAY_PARAM_T;
 
 typedef struct dtblob_struct
 {
-   void *fdt;
-   char fdt_is_malloced;
-   char trailer_is_malloced;
-   char fixups_applied;
-   uint32_t min_phandle;
-   uint32_t max_phandle;
-   void *trailer;
-   int trailer_len;
+    void *fdt;
+    char fdt_is_malloced;
+    char trailer_is_malloced;
+    char fixups_applied;
+    uint32_t min_phandle;
+    uint32_t max_phandle;
+    void *trailer;
+    int trailer_len;
 } DTBLOB_T;
 
 typedef struct pin_iter_struct
 {
-   DTBLOB_T *dtb;
-   const void *pinctrl;
-   int pinctrl_len;
-   int pinctrl_off;
-   const void *pins;
-   const void *funcs;
-   const void *pulls;
-   int pins_len;
-   int pin_off;
-   int funcs_len;
-   int pulls_len;
+    DTBLOB_T *dtb;
+    const void *pinctrl;
+    int pinctrl_len;
+    int pinctrl_off;
+    const void *pins;
+    const void *funcs;
+    const void *pulls;
+    int pins_len;
+    int pin_off;
+    int funcs_len;
+    int pulls_len;
 } PIN_ITER_T;
 
 typedef void DTOVERLAY_LOGGING_FUNC(dtoverlay_logging_type_t type,
@@ -126,6 +126,10 @@ int dtoverlay_create_prop_fragment(DTBLOB_T *dtb, int idx, int target_phandle,
                                    const char *prop_name, const void *prop_data,
                                    int prop_len);
 
+int dtoverlay_merge_fragment(DTBLOB_T *base_dtb, int target_off,
+                                    const DTBLOB_T *overlay_dtb,
+                                    int overlay_off, int depth);
+
 int dtoverlay_fixup_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb);
 
 int dtoverlay_merge_overlay(DTBLOB_T *base_dtb, DTBLOB_T *overlay_dtb);
@@ -134,6 +138,17 @@ int dtoverlay_merge_params(DTBLOB_T *dtb, const DTOVERLAY_PARAM_T *params,
                            unsigned int num_params);
 
 int dtoverlay_filter_symbols(DTBLOB_T *dtb);
+
+const char *dtoverlay_find_fixup(DTBLOB_T *dtb, const char *fixup_loc);
+int dtoverlay_add_fixup(DTBLOB_T *dtb, const char *symbol, const char *fixup_loc);
+int dtoverlay_delete_fixup(DTBLOB_T *dtb, const char *fixup_loc);
+
+int dtoverlay_stringlist_replace(const char *src, int src_len,
+                                 const char *src_prefix, int src_prefix_len,
+                                 const char *dst_prefix, int dst_prefix_len,
+                                 char *dst);
+void dtoverlay_set_intra_fragment_merged_callback(void (*callback)(DTBLOB_T *, int, int));
+void dtoverlay_set_cell_changed_callback(void (*callback)(DTBLOB_T *, int, const char *, int, int));
 
 const char *dtoverlay_find_override(DTBLOB_T *dtb, const char *override_name,
                                     int *data_len);

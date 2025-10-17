@@ -358,7 +358,7 @@ if ($try_all)
         foreach my $base (@base_files)
         {
             next if (!-f "$TMPDIR/$base.dtb");
-            next if (($overlay =~ /(wifi|bt)/) && ($base !~ /^(bcm2708-rpi-zero-w|bcm2709-rpi-zero-2|bcm2710-rpi-3-|bcm2711-rpi-(4|cm4$)|bcm2712-rpi-(5|cm5))/));
+            next if (($overlay =~ /(wifi|bt)/) && ($base !~ /^(bcm2708-rpi-zero-w|bcm2710-rpi-zero-2|bcm2710-rpi-3-|bcm2711-rpi-(4|cm4$)|bcm2712-rpi-(5|cm5))/));
             next if ($overlay eq 'vl805' && $base eq 'bcm2711-rpi-cm4s');
             next if ($overlay_props->{'bcm2711'} && $base !~ /^bcm2711/);
             next if ($overlay_props->{'bcm2712'} && $base !~ /^bcm2712/);
@@ -507,7 +507,7 @@ sub parse_readme
         error("TABs in README ($linenum)") if ($line =~ /\t/);
         error("Trailing whitespace in README ($linenum)") if ($line =~ /\s$/);
         error("Line too long in README ($linenum)")
-            if (length($line) > 80 && $line !~ /^\s+[^\s]+$/);
+            if (length($line) > 80 && $line !~ /^\s*[^\s]+$/);
 
         if ($overlay && !$line)
         {

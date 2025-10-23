@@ -190,7 +190,17 @@ uname -a
 cat /proc/cpuinfo | tail -3
 
 echo "Throttled flag  : "`vcgencmd get_throttled`
-echo "Camera          : "`vcgencmd get_camera`
+
+
+echo "Camera Information"
+echo "------------------"
+echo
+
+if command -v libcamera-hello > /dev/null; then
+    libcamera-hello --list
+else
+    echo "Camera          : "`vcgencmd get_camera`
+fi
 
 echo
 echo "Videocore information"

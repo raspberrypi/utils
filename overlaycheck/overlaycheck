@@ -867,12 +867,14 @@ sub container_checker
     foreach my $param (@$params)
     {
         next if (ref $param || ($exclude && $param =~ $exclude));
+        my $paramx = $param;
+        $paramx =~ s/\d$/x/;
         my $target = `fdtget -t bx "$TMPDIR/$name.dtbo" /__overrides__ $param`;
         chomp($target);
         next if ($target !~ /^0 0 0 0 /);
         error("Failed to merge $name with $basename") if (system($DTMERGE, $verbose ? ('-d') : (), $base, $MERGED_DTB, "$TMPDIR/$name.dtbo", $param) != 0);
         my $diffs = `dtdiff $base $MERGED_DTB`;
-        if ($diffs !~ /^\+\s*$param@/m)
+        if ($diffs !~ /^\+\s*$param@/m && $diffs !~ /^\+\s*$paramx@/m)
         {
             error("container_checker($name): parameter '$param' doesn't enable matching node");
         }

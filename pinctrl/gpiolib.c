@@ -1,5 +1,6 @@
 #define _FILE_OFFSET_BITS 64
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <fcntl.h>
@@ -11,8 +12,6 @@
 
 #include "gpiochip.h"
 #include "util.h"
-
-#define ARRAY_SIZE(_a) (sizeof(_a)/sizeof(_a[0]))
 
 #define MAX_GPIO_CHIPS 8
 
@@ -53,13 +52,23 @@ static GPIO_CHIP_INSTANCE_T *gpio_create_instance(const GPIO_CHIP_T *chip,
                                                   const char *name,
                                                   const char *dtnode)
 {
-    GPIO_CHIP_INSTANCE_T *inst = &gpio_chips[num_gpio_chips];
+    GPIO_CHIP_INSTANCE_T *inst;
+    unsigned i;
+
+    // Skip it if already discovered
+    for (i = 0; i < num_gpio_chips; i++)
+    {
+        if (!strcmp(gpio_chips[i].dtnode, dtnode))
+            return NULL;
+    }
 
     if (num_gpio_chips >= MAX_GPIO_CHIPS)
     {
         assert(0);
         return NULL;
     }
+
+    inst = &gpio_chips[num_gpio_chips];
 
     inst->chip = chip;
     inst->name = name ? name : chip->name;
@@ -394,9 +403,17 @@ const char *gpio_get_drive_name(GPIO_DRIVE_T drive)
 
 static const GPIO_CHIP_T *gpio_find_chip(const char *name)
 {
-    const GPIO_CHIP_T *chip;
+#if LIBRARY_BUILD
+    const GPIO_CHIP_T *const *start = &library_gpiochips[0];
+    const GPIO_CHIP_T *const *end = &library_gpiochips[0] + library_gpiochips_count;
+#else
+    const GPIO_CHIP_T *const *start = &__start_gpiochips;
+    const GPIO_CHIP_T *const *end = &__stop_gpiochips;
+#endif
+    const GPIO_CHIP_T *const *chip_ptr;
 
-    for (chip = &__start_gpiochips; name && chip < &__stop_gpiochips; chip++) {
+    for (chip_ptr = start; name && chip_ptr < end; chip_ptr++) {
+        const GPIO_CHIP_T *chip = *chip_ptr;
         if (!strcmp(name, chip->name) ||
             !strcmp(name, chip->compatible))
             return chip;
@@ -405,19 +422,66 @@ static const GPIO_CHIP_T *gpio_find_chip(const char *name)
     return NULL;
 }
 
+static GPIO_CHIP_INSTANCE_T *gpio_add_chip_instance(const char *dtnode, const char *gpiomem_idx)
+{
+    char pathbuf[FILENAME_MAX];
+    GPIO_CHIP_INSTANCE_T *inst;
+    const GPIO_CHIP_T *chip;
+    uint64_t phys_addr;
+    char *compatible;
+
+    compatible = dt_read_prop(dtnode, "compatible", NULL);
+    if (!compatible)
+    {
+        sprintf(pathbuf, "%s/..", dtnode);
+        compatible = dt_read_prop(pathbuf, "compatible", NULL);
+    }
+
+    chip = gpio_find_chip(compatible);
+    dt_free(compatible);
+
+    // Skip unknown gpio chips
+    if (!chip)
+        return NULL;
+
+    if (chip->size)
+    {
+        phys_addr = dt_parse_addr(dtnode);
+        if (phys_addr == INVALID_ADDRESS)
+            return NULL;
+    }
+    else
+    {
+        phys_addr = 0;
+    }
+
+    inst = gpio_create_instance(chip, phys_addr, NULL, dtnode);
+    // Skip duplicates (or if there is an error)
+    if (!inst)
+        return NULL;
+
+    sprintf(pathbuf, "/dev/gpiomem%s", gpiomem_idx);
+    inst->mem_fd = open(pathbuf, O_RDWR|O_SYNC);
+    return inst;
+}
+
 int gpiolib_init(void)
 {
     const GPIO_CHIP_T *chip;
     GPIO_CHIP_INSTANCE_T *inst;
     char pathbuf[FILENAME_MAX];
     char gpiomem_idx[4];
-    const char *dtpath = "/proc/device-tree";
+    const char *dtpath = "/sys/firmware/devicetree/base";
+    const char *ofnode_prefix = dtpath + 4;
+    const char *gpiopath = "/sys/bus/gpio/devices";
+    DIR *dir;
+    struct dirent *de;
     const char *p;
-    char *alias = NULL, *names, *end, *compatible;
-    uint64_t phys_addr;
+    char *alias = NULL, *names, *end;
     size_t names_len;
     unsigned gpio_base;
     unsigned pin, i;
+    int prefix_len, len;
 
     for (pin = 0; pin <= NUM_HDR_PINS; pin++)
         hdr_gpios[pin] = GPIO_INVALID;
@@ -441,6 +505,7 @@ int gpiolib_init(void)
 
     dt_set_path(dtpath);
 
+    // Scan the gpio<n> aliases, stopping at the first absence
     for (i = 0; ; i++)
     {
         sprintf(pathbuf, "gpio%d", i);
@@ -453,40 +518,32 @@ int gpiolib_init(void)
         }
         if (!alias)
             break;
-
-        compatible = dt_read_prop(alias, "compatible", NULL);
-        if (!compatible)
-        {
-            sprintf(pathbuf, "%s/..", alias);
-            compatible = dt_read_prop(pathbuf, "compatible", NULL);
-        }
-
-        chip = gpio_find_chip(compatible);
-        dt_free(compatible);
-
-        if (!chip)
-        {
-            // Skip the unknown gpio chip
+        if (!gpio_add_chip_instance(alias, gpiomem_idx))
             dt_free(alias);
-            continue;
-        }
+    }
 
-        phys_addr = dt_parse_addr(alias);
-        if (phys_addr == INVALID_ADDRESS)
+    // Now look for other gpio chips without aliases
+    dir = opendir(gpiopath);
+    prefix_len = strlen(ofnode_prefix);
+    while (dir && ((de = readdir(dir)) != NULL))
+    {
+        if (de->d_name[0] != '.')
         {
-            dt_free(alias);
-            return -1;
+            char symlink[FILENAME_MAX];
+            char *match;
+            char *dtnode;
+            sprintf(pathbuf, "%s/%s/of_node", gpiopath, de->d_name);
+            len = readlink(pathbuf, symlink, sizeof(symlink));
+            if (len < 0)
+                continue;
+            symlink[len] = '\0';
+            match = strstr(symlink, ofnode_prefix);
+            if (!match)
+                continue;
+            dtnode = strdup(match + prefix_len);
+            if (dtnode && !gpio_add_chip_instance(dtnode, gpiomem_idx))
+                free(dtnode);
         }
-
-        inst = gpio_create_instance(chip, phys_addr, NULL, alias);
-        if (!inst)
-        {
-            dt_free(alias);
-            return -1;
-        }
-
-        sprintf(pathbuf, "/dev/gpiomem%s", gpiomem_idx);
-        inst->mem_fd = open(pathbuf, O_RDWR|O_SYNC);
     }
 
     gpio_base = 0;
@@ -656,6 +713,9 @@ int gpiolib_mmap(void)
 
         inst = &gpio_chips[i];
         chip = inst->chip;
+
+        if (!chip->interface->gpio_probe_instance || !chip->size)
+            continue;
 
         align = inst->phys_addr & (pagesize - 1);
 

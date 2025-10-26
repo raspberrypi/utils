@@ -1,0 +1,229 @@
+#!/bin/env perl
+
+use strict;
+use Getopt::Long;
+
+
+my @warnings_to_suppress =
+    (
+        'unit_address_vs_reg',
+        'simple_bus_reg',
+        'unit_address_format',
+        'interrupts_property',
+        'gpios_property',
+        'label_is_string',
+        'unique_unit_address',
+        'avoid_unnecessary_addr_size',
+        'pci_device_reg',
+        'pci_device_bus_num',
+        'reg_format',
+        'interrupt_provider',
+        'dma_ranges_format',
+        'avoid_default_addr_size',
+    );
+my @cpp_files = ('arm-linux-gnueabihf-cpp', 'aarch64-linux-gnu-cpp', 'cpp');
+my $cpp;
+foreach my $cmd (@cpp_files) {
+    if (system("command -v $cmd >/dev/null 2>&1") == 0) {
+        $cpp = $cmd;
+        last;
+    }
+}
+die "* no suitable cpp found\n" if (!$cpp);
+my $dtc_opt;
+my $in_fmt;
+my $kerndir;
+my $out_file;
+my $help;
+my @include_paths = ('.');
+my $justprint;
+my $show_warnings;
+
+my @args = (@ARGV);
+
+Getopt::Long::Configure(qw( require_order gnu_getopt ));
+
+my @kdtc_opts = (
+    'kerndir|k=s'        => \$kerndir,
+    'just-print|n'       => \$justprint,
+    'warnings|w'         => \$show_warnings,
+);
+
+Getopt::Long::GetOptions(
+    'in-format|I=s'      => \$in_fmt,
+    'quiet|q'            => \$dtc_opt,
+    'out|o=s'            => \$out_file,
+    'out-format|O=s'     => \$dtc_opt,
+    'out-version|V=s'    => \$dtc_opt,
+    'out-dependency|d=s' => \$dtc_opt,
+    'reserve|R=i'        => \$dtc_opt,
+    'space|S=i'          => \$dtc_opt,
+    'pad|p=i'            => \$dtc_opt,
+    'align|a=i'          => \$dtc_opt,
+    'boot-cpu|b=i'       => \$dtc_opt,
+    'force|f'            => \$dtc_opt,
+    'include|i=s'        => \@include_paths,
+    'sort|s'             => \$dtc_opt,
+    'phandle|H=s'        => \$dtc_opt,
+    'warning|W=s'        => \$dtc_opt,
+    'error|E=s'          => \$dtc_opt,
+    'symbols|@'          => \$dtc_opt,
+    'auto-alias|A'       => \$dtc_opt,
+    'annotate|T'         => \$dtc_opt,
+    'help|h'             => \$help,
+    'version|v'          => \$dtc_opt,
+
+    @kdtc_opts
+) || usage();
+
+usage() if ($help);
+
+# Filter out the arguments which are only for kdtc
+filter_args(\@args, \@kdtc_opts);
+
+# Remove any remaining parameter(s) - the filename, if there is one
+splice(@args, @args - @ARGV);
+
+my $simple_mode = !($dtc_opt || $in_fmt || $out_file);
+
+my $in_file = $ARGV[0];
+if (!$out_file)
+{
+    $out_file = $ARGV[1];
+    $out_file = "$1.dtbo" if (!$out_file && $in_file =~ /^(.+)-overlay.dts$/);
+    $out_file = "$1.dtb" if (!$out_file && $in_file =~ /^(.+).dts$/);
+    push @args, '-o', $out_file if ($out_file);
+}
+
+my $dts_in = 1;
+
+if ($in_fmt =~ /^(dtb|fs|yaml)$/) {
+    $dts_in = 0;
+} elsif ($in_file =~ /\.(dtb|dtbo|yaml)$/) {
+    $dts_in = 0;
+}
+
+if (!$kerndir)
+{
+    $kerndir = `git rev-parse --show-toplevel 2>/dev/null`;
+    chomp($kerndir);
+    #fatal_error("This isn't a Linux repository") if (!-d "$kerndir/kernel");
+}
+
+push @include_paths, "$kerndir/include", "$kerndir/arch/arm/boot/dts/overlays" if ($kerndir);
+
+if ($simple_mode)
+{
+    if ($dts_in)
+    {
+        push @args, '-@', '-H', 'epapr', '-I', 'dts', '-O', 'dtb';
+    }
+    else
+    {
+        push @args, '-I', 'dtb', '-O', 'dts';
+    }
+}
+
+if ($dts_in) {
+    foreach my $path (@include_paths)
+    {
+        escape(\$path);
+        $path = "-I$path";
+    }
+
+    escape(\$in_file);
+
+    foreach my $arg (@args)
+    {
+        escape(\$arg);
+    }
+
+    if (!$show_warnings)
+    {
+        # And add the warning suppression
+        foreach my $warn (@warnings_to_suppress)
+        {
+            push @args, '-W', "no-".$warn;
+        }
+    }
+
+    my $cmd = "$cpp -nostdinc -undef -D__DTS__ -x assembler-with-cpp " . join(" ", @include_paths) . " $in_file | dtc " . join(" ", @args);
+    if ($justprint)
+    {
+        print($cmd, "\n");
+    }
+    else
+    {
+        exec($cmd);
+    }
+} else {
+    my @cmd = ('dtc', @args, $in_file);
+    if ($justprint)
+    {
+        foreach my $arg (@cmd)
+        {
+            escape(\$arg);
+        }
+        print(join(" ", @cmd), "\n");
+    }
+    else
+    {
+        exec(@cmd);
+    }
+}
+
+sub escape
+{
+    ${$_[0]} = "'" . ${$_[0]} . "'" if (${$_[0]} =~ /^[^'].*\s/);
+}
+
+sub usage
+{
+    print("Usage: kdtc [<opts>] [<infile> [<outfile>]]\n");
+    print("  where <opts> can be any of:\n");
+    print("\n");
+    print("    -h|--help            Show this help message\n");
+    print("    -i|--include <path>  Add a path to search for include files\n");
+    print("    -k|--kerndir <path>  The path to the kernel tree\n");
+    print("    -n|--just-print      Just show the command that would be executed\n");
+    print("    -w|--warnings        Don't suppress common dtc warnings\n");
+    print("\n");
+    print("  or any dtc options (see 'dtc -h')\n");
+    print("\n");
+    print("When run with no dtc options, kdtc detects the input format and attempts\n");
+    print("to do the right thing. With no <outfile>, kdtc will infer 'x.dtbo' from an\n");
+    print("<infile> of 'x-overlay.dts'.\n");
+    print("\n");
+    print("If run within a git kernel source tree, the kerndir path is inferred.\n");
+    exit(0);
+}
+
+sub filter_args
+{
+    my ($args, $remove) = @_;
+    my %filters;
+    my $i;
+
+    for ($i = 0; $i < @$remove; $i += 2)
+    {
+        my $opt = $remove->[$i];
+        my ($long, $short, $type) = ($opt =~ /^([-a-z]+)\|([a-zA-Z])(?:=([is]))?$/);
+        my $len = $type ? 2 : 1;
+        $filters{"--$long"} = $len;
+        $filters{"-$short"} = $len;
+    }
+
+    $i = 0;
+    while ($i < @$args)
+    {
+        my $filter = $filters{$args->[$i]};
+        if ($filter)
+        {
+            splice(@$args, $i, $filter);
+        }
+        else
+        {
+            $i++;
+        }
+    }
+}

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016 Raspberry Pi (Trading) Ltd.
+Copyright (c) 2016-2023 Raspberry Pi Ltd.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -13,16 +13,16 @@ modification, are permitted provided that the following conditions are met:
       names of its contributors may be used to endorse or promote products
       derived from this software without specific prior written permission.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
-DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
+  DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+  (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <stdio.h>
@@ -106,6 +106,9 @@ const char *error_file = NULL;
 const char *platform_string;
 int platform_string_len;
 int dry_run = 0;
+
+char cell_source_loc[DTOVERLAY_MAX_PATH];
+int cell_source_loc_len;
 
 int main(int argc, const char **argv)
 {
@@ -341,7 +344,7 @@ int main(int argc, const char **argv)
         break;
     }
 
-orderly_exit:
+  orderly_exit:
     if (state)
         free_state(state);
     free_strings();
@@ -352,11 +355,11 @@ orderly_exit:
     return ret;
 }
 
-int dtparam_callback(int override_type, const char *override_value,
-                     DTBLOB_T *dtb, int node_off,
-                     const char *prop_name, int target_phandle,
-                     int target_off, int target_size,
-                     void *callback_state)
+static int dtparam_callback(int override_type, const char *override_value,
+                            DTBLOB_T *dtb, int node_off,
+                            const char *prop_name, int target_phandle,
+                            int target_off, int target_size,
+                            void *callback_state)
 {
     STRING_VEC_T *used_props = callback_state;
     char prop_id[80];
@@ -382,9 +385,9 @@ int dtparam_callback(int override_type, const char *override_value,
 }
 
 // Returns 0 on success, -ve for fatal errors and +ve for non-fatal errors
-int dtparam_apply(DTBLOB_T *dtb, const char *override_name,
-                  const char *override_data, int data_len,
-                  const char *override_value, STRING_VEC_T *used_props)
+static int dtparam_apply(DTBLOB_T *dtb, const char *override_name,
+                         const char *override_data, int data_len,
+                         const char *override_value, STRING_VEC_T *used_props)
 {
     void *data;
     int err;
@@ -408,6 +411,140 @@ int dtparam_apply(DTBLOB_T *dtb, const char *override_name,
     }
 
     return err;
+}
+
+static void intra_fragment_merged_callback(DTBLOB_T *dtb, int fragment_off,
+                                           int target_off)
+{
+    // look for all fixups that refer to the indicated fragment, and rebase them
+    // onto the target
+    char fragment_path[DTOVERLAY_MAX_PATH];
+    char target_path[DTOVERLAY_MAX_PATH];
+    char *src_path;
+    char *dst_path;
+    DTBLOB_T clone_dtb;
+    DTBLOB_T *src_dtb;
+    int fragment_path_len;
+    int target_path_len;
+    int fixups_off;
+    int fixup_off;
+    int src_off;
+    int dst_off;
+
+    fdt_get_path(dtb->fdt, fragment_off, fragment_path, sizeof(fragment_path));
+    fragment_path_len = strlen(fragment_path);
+    fragment_path[fragment_path_len++] = ':';
+    fragment_path[fragment_path_len] = '\0';
+
+    fdt_get_path(dtb->fdt, target_off, target_path, sizeof(target_path));
+    target_path_len = strlen(target_path);
+    target_path[target_path_len++] = ':';
+    target_path[target_path_len] = '\0';
+
+    fixups_off = fdt_path_offset(dtb->fdt, "/__fixups__");
+    if (fixups_off < 0)
+        goto try_local_fixups;
+
+    for (fixup_off = fdt_first_property_offset(dtb->fdt, fixups_off);
+         fixup_off >= 0;
+         fixup_off = fdt_next_property_offset(dtb->fdt, fixup_off))
+    {
+        const char *fixups_stringlist;
+        const char *symbol_name;
+        char *new_list = NULL;
+        int list_len;
+        int new_len;
+        int err;
+        int i;
+
+        fixups_stringlist = fdt_getprop_by_offset(dtb->fdt, fixup_off,
+                                                  &symbol_name, &list_len);
+        for (i = 0; i < 2; i++)
+        {
+            new_len = dtoverlay_stringlist_replace(fixups_stringlist, list_len,
+                                                   fragment_path, fragment_path_len,
+                                                   target_path, target_path_len,
+                                                   new_list);
+            if (new_len < 0)
+                break;
+            if (!new_list)
+                new_list = malloc(new_len);
+        }
+
+        if (!new_list)
+            continue;
+
+        err = fdt_setprop(dtb->fdt, fixups_off, symbol_name, new_list, new_len);
+        free(new_list);
+        if (err < 0)
+            break;
+    }
+
+try_local_fixups:
+    // Strip off the trailing ':'s
+    fragment_path[--fragment_path_len] = '\0';
+    target_path[--target_path_len] = '\0';
+    src_path = sprintf_dup("/__local_fixups__%s", fragment_path);
+    dst_path = sprintf_dup("/__local_fixups__%s", target_path);
+    src_dtb = dtb;
+    src_off = fdt_path_offset(src_dtb->fdt, src_path);
+    if (src_off < 0) // No phandles in the fragment payload
+        return;
+
+    dst_off = dtoverlay_create_node(dtb, dst_path, 0);
+    if (dst_off < 0)
+        fatal_error("failed to copy local fixups");
+    if (dst_off < src_off)
+    {
+        // Make a copy of the src, so that it doesn't move
+        int overlay_size = fdt_totalsize(dtb->fdt);
+        void *overlay_copy = malloc(overlay_size);
+        if (!overlay_copy)
+            fatal_error("out of memory");
+        memcpy(overlay_copy, dtb->fdt, overlay_size);
+        memcpy(&clone_dtb, dtb, sizeof(DTBLOB_T));
+        clone_dtb.fdt = overlay_copy;
+        src_dtb = &clone_dtb;
+        src_off = fdt_path_offset(src_dtb->fdt, src_path);
+    }
+    if (dtoverlay_merge_fragment(dtb, dst_off, src_dtb, src_off, 1))
+        fatal_error("failed to copy local fixups");
+    if (src_dtb != dtb)
+        free(src_dtb->fdt);
+}
+
+static void cell_changed_callback(DTBLOB_T *dtb, int node_off, const char *prop_name,
+                                  int target_off, int cell_data_offset)
+{
+    char cell_target_loc[DTOVERLAY_MAX_PATH];
+    const char *symbol;
+    int path_len;
+
+    sprintf(cell_source_loc + cell_source_loc_len, "%d", cell_data_offset); // XXX
+
+    fdt_get_path(dtb->fdt, node_off, cell_target_loc,
+                 sizeof(cell_target_loc));
+    path_len = strlen(cell_target_loc);
+    sprintf(cell_target_loc + path_len, ":%s:%d", prop_name, target_off); // XXX
+
+    dtoverlay_delete_fixup(dtb, cell_target_loc);
+    symbol = dtoverlay_find_fixup(dtb, cell_source_loc);
+    if (symbol)
+        dtoverlay_add_fixup(dtb, symbol, cell_target_loc);
+}
+
+// Returns 0 on success, -ve for fatal errors and +ve for non-fatal errors
+static int apply_override(DTBLOB_T *dtb, const char *override_name,
+                          const char *override_data, int data_len,
+                          const char *override_value)
+{
+    cell_source_loc_len = sprintf(cell_source_loc, "/__overrides__:%s:", override_name);
+
+    return dtoverlay_foreach_override_target(dtb, override_name,
+                                             override_data, data_len,
+                                             override_value,
+                                             dtoverlay_override_one_target,
+                                             NULL);
 }
 
 static int apply_parameter(DTBLOB_T *overlay_dtb, const char *arg, int is_dtparam,
@@ -443,9 +580,9 @@ static int apply_parameter(DTBLOB_T *overlay_dtb, const char *arg, int is_dtpara
                             override, override_len,
                             param_val, used_props);
     else
-        err = dtoverlay_apply_override(overlay_dtb, param,
-                                       override, override_len,
-                                       param_val);
+        err = apply_override(overlay_dtb, param,
+                             override, override_len,
+                             param_val);
     if (err != 0)
         return error("Failed to set %s=%s", param, param_val);
 
@@ -463,7 +600,7 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
 {
     const char *overlay_name;
     const char *overlay_file;
-    const char *overrides = NULL;
+    char *overrides = NULL;
     char *param_string = NULL;
     int is_dtparam;
     DTBLOB_T *base_dtb = NULL;
@@ -481,7 +618,7 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
         overlay_file = sprintf_dup("%s/%s", work_dir, "base.dtb");
         if (run_cmd("dtc -I fs -O dtb -o '%s' /proc/device-tree 1>/dev/null 2>&1",
                     overlay_file) != 0)
-           return error("Failed to read active DTB");
+            return error("Failed to read active DTB");
     }
     else if ((len > 0) && (strcmp(overlay + len, ".dtbo") == 0))
     {
@@ -498,16 +635,40 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
     }
     else
     {
-        const char *remapped = dtoverlay_remap_overlay(overlay);
+        /* Allow for comma-separated parameters */
+        const char *in_params = strchr(overlay, ',');
+        const char *remapped;
         int name_len;
+
+        if (in_params && in_params[1])
+        {
+            int len = in_params - overlay;
+            overlay = sprintf_dup("%.*s", len, overlay);
+            if (!overlay)
+                return error("Out of memory");
+            in_params++;
+        }
+        else
+        {
+            in_params = "";
+        }
+
+        remapped = dtoverlay_remap_overlay(overlay);
         if (!remapped)
             return error("Failed to load '%s'", overlay);
         if (strcmp(overlay, remapped))
             dtoverlay_debug("mapped overlay '%s' to '%s'", overlay, remapped);
         overlay = remapped;
         name_len = strcspn(overlay, ",");
-        if (overlay[name_len])
-            overrides = overlay + name_len + 1;
+        if (overlay[name_len] && overlay[name_len + 1])
+        {
+            /* There are parameters */
+            overrides = sprintf_dup("%s,%s", overlay + name_len + 1, in_params);
+        }
+        else
+        {
+            overrides = strdup(in_params);
+        }
         overlay = sprintf_dup("%.*s", name_len, overlay);
         overlay_file = sprintf_dup("%s/%s.dtbo", overlay_src_dir, overlay);
     }
@@ -527,22 +688,25 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
         string_vec_init(&used_props);
     }
 
-    /* Apply any parameters that came from the overlay map */
+    dtoverlay_set_cell_changed_callback(&cell_changed_callback);
+
+    /* Apply any parameters that came from the overlay map, along with
+       any supplied on the command line separated by commas */
     while (overrides && *overrides)
     {
         int override_len = strcspn(overrides, ",");
-        char *override = strndup(overrides, override_len);
-        if (!override)
-            return error("Out of memory applying parameter");
-        err = apply_parameter(overlay_dtb, override, is_dtparam,
+        int last = !overrides[override_len];
+        overrides[override_len] = '\0';
+        err = apply_parameter(overlay_dtb, overrides, is_dtparam,
                               &used_props, &param_string);
-        free(override);
         if (err)
             return err;
+        if (last)
+            break;
         overrides += override_len + 1;
     }
 
-    /* Then any supplied on the commad line */
+    /* Then any others supplied on the command line */
     for (i = 0; i < argc; i++)
     {
         err = apply_parameter(overlay_dtb, argv[i], is_dtparam,
@@ -551,10 +715,14 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
             return err;
     }
 
+    dtoverlay_set_cell_changed_callback(NULL);
+
     /* Apply any intra-overlay fragments, filtering the symbols */
+    dtoverlay_set_intra_fragment_merged_callback(intra_fragment_merged_callback);
     err = dtoverlay_merge_overlay(NULL, overlay_dtb);
     if (err != 0)
         return error("Failed to apply intra-overlay fragments");
+    dtoverlay_set_intra_fragment_merged_callback(NULL);
 
     if (is_dtparam)
     {
@@ -575,7 +743,7 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
             prop_data = dtoverlay_get_property(base_dtb, node_off,
                                                prop_name, &prop_len);
             err = dtoverlay_create_prop_fragment(overlay_dtb, i, phandle,
-                                   prop_name, prop_data, prop_len);
+                                                 prop_name, prop_data, prop_len);
         }
 
         dtoverlay_free_dtb(base_dtb);

@@ -104,13 +104,13 @@ static const char *rp1_gpio_fsel_names[RP1_NUM_GPIOS][RP1_FSEL_COUNT] =
     { "SPI1_MISO" , "DPI_D15"      , "I2S0_WS"      , "PWM0_CHAN3"   , "I2S1_WS"      , "SYS_RIO019", "PROC_RIO019", "PIO19"      , },
     { "SPI1_MOSI" , "DPI_D16"      , "I2S0_SDI0"    , "GPCLK0"       , "I2S1_SDI0"    , "SYS_RIO020", "PROC_RIO020", "PIO20"      , },
     { "SPI1_SCLK" , "DPI_D17"      , "I2S0_SDO0"    , "GPCLK1"       , "I2S1_SDO0"    , "SYS_RIO021", "PROC_RIO021", "PIO21"      , },
-    { "SD0CLK"    , "DPI_D18"      , "I2S0_SDI1"    , "SDA3"         , "I2S1_SDI1"    , "SYS_RIO022", "PROC_RIO022", "PIO22"      , },
+    { "SD0_CLK"   , "DPI_D18"      , "I2S0_SDI1"    , "SDA3"         , "I2S1_SDI1"    , "SYS_RIO022", "PROC_RIO022", "PIO22"      , },
     { "SD0_CMD"   , "DPI_D19"      , "I2S0_SDO1"    , "SCL3"         , "I2S1_SDO1"    , "SYS_RIO023", "PROC_RIO023", "PIO23"      , },
     { "SD0_DAT0"  , "DPI_D20"      , "I2S0_SDI2"    , 0              , "I2S1_SDI2"    , "SYS_RIO024", "PROC_RIO024", "PIO24"      , "SPI2_CE1" , },
     { "SD0_DAT1"  , "DPI_D21"      , "I2S0_SDO2"    , "MIC_CLK"      , "I2S1_SDO2"    , "SYS_RIO025", "PROC_RIO025", "PIO25"      , "SPI3_CE1" , },
     { "SD0_DAT2"  , "DPI_D22"      , "I2S0_SDI3"    , "MIC_DAT0"     , "I2S1_SDI3"    , "SYS_RIO026", "PROC_RIO026", "PIO26"      , "SPI5_CE1" , },
     { "SD0_DAT3"  , "DPI_D23"      , "I2S0_SDO3"    , "MIC_DAT1"     , "I2S1_SDO3"    , "SYS_RIO027", "PROC_RIO027", "PIO27"      , "SPI1_CE1" , },
-    { "SD1CLK"    , "SDA4"         , "I2S2_SCLK"    , "SPI6_MISO"    , "VBUS_EN0"     , "SYS_RIO10" , "PROC_RIO10" , },
+    { "SD1_CLK"   , "SDA4"         , "I2S2_SCLK"    , "SPI6_MISO"    , "VBUS_EN0"     , "SYS_RIO10" , "PROC_RIO10" , },
     { "SD1_CMD"   , "SCL4"         , "I2S2_WS"      , "SPI6_MOSI"    , "VBUS_OC0"     , "SYS_RIO11" , "PROC_RIO11" , },
     { "SD1_DAT0"  , "SDA5"         , "I2S2_SDI0"    , "SPI6_SCLK"    , "TXD5"         , "SYS_RIO12" , "PROC_RIO12" , },
     { "SD1_DAT1"  , "SCL5"         , "I2S2_SDO0"    , "SPI6_CE0"     , "RXD5"         , "SYS_RIO13" , "PROC_RIO13" , },
@@ -194,13 +194,16 @@ static uint32_t rp1_gpio_sys_rio_sync_in_read(volatile uint32_t *base, int bank,
                            RP1_GPIO_SYS_RIO_REG_SYNC_IN_OFFSET);
 }
 
-
-static void rp1_gpio_sys_rio_out_write(volatile uint32_t *base, int bank,
-                                       int offset, uint32_t value)
+static void rp1_gpio_sys_rio_out_set(volatile uint32_t *base, int bank, int offset)
 {
-    UNUSED(offset);
     rp1_gpio_write32(base, gpio_state.sys_rio[bank],
-                     RP1_GPIO_SYS_RIO_REG_OUT_OFFSET, value);
+                     RP1_GPIO_SYS_RIO_REG_OUT_OFFSET + RP1_SET_OFFSET, 1U << offset);
+}
+
+static void rp1_gpio_sys_rio_out_clr(volatile uint32_t *base, int bank, int offset)
+{
+    rp1_gpio_write32(base, gpio_state.sys_rio[bank],
+                     RP1_GPIO_SYS_RIO_REG_OUT_OFFSET + RP1_CLR_OFFSET, 1U << offset);
 }
 
 static uint32_t rp1_gpio_sys_rio_oe_read(volatile uint32_t *base, int bank)
@@ -355,16 +358,13 @@ static int rp1_gpio_get_level(void *priv, unsigned gpio)
 static void rp1_gpio_set_drive(void *priv, unsigned gpio, GPIO_DRIVE_T drv)
 {
     volatile uint32_t *base = priv;
-    uint32_t reg;
     int bank, offset;
 
     rp1_gpio_get_bank(gpio, &bank, &offset);
-    reg = rp1_gpio_sys_rio_out_read(base, bank, offset);
     if (drv == DRIVE_HIGH)
-        reg |= (1U << offset);
+        rp1_gpio_sys_rio_out_set(base, bank, offset);
     else if (drv == DRIVE_LOW)
-        reg &= ~(1U << offset);
-    rp1_gpio_sys_rio_out_write(base, bank, offset, reg);
+        rp1_gpio_sys_rio_out_clr(base, bank, offset);
 }
 
 static void rp1_gpio_set_pull(void *priv, unsigned gpio, GPIO_PULL_T pull)

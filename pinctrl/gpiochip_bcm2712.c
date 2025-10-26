@@ -9,8 +9,6 @@
 #include "gpiochip.h"
 #include "util.h"
 
-#define ARRAY_SIZE(_a) (sizeof(_a)/sizeof(_a[0]))
-
 /* 2712 definitions */
 
 #define BCM2712_GIO_DATA       0x04
@@ -321,7 +319,7 @@ static volatile uint32_t *bcm2712_pad_base(struct bcm2712_inst *inst,
         return NULL;
     }
 
-    gpio = gpio_offset + inst->pad_offset;
+    gpio += inst->pad_offset;
     *bit = (gpio % 15) * 2;
     return inst->pinmux_base + (gpio / 15);
 }
@@ -547,7 +545,7 @@ static void *bcm2712_gpio_create_instance(const GPIO_CHIP_T *chip,
     {
         size_t names_len;
         char *names = dt_read_prop(dtnode, "gpio-line-names", &names_len);
-        if (!names[0])
+        if (names && !names[0])
             flags |= FLAGS_D0;
         dt_free(names);
     }

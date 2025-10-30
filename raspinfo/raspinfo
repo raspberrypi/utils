@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Some of the regex's used in sed
 # Catch basic IP6 address   "s/\([0-9a-fA-F]\{1,4\}:\)\{7,7\}[0-9a-fA-F]\{1,4\}/y.y.y.y.y.y.y.y/g"
@@ -68,7 +68,7 @@ display_info_drm() {
          cardfound=1
       fi
    done
-   if [ "$cardfound" == "0" ];
+   if [ "$cardfound" = "0" ];
    then
       echo "kms state not found"
       echo
@@ -115,7 +115,7 @@ display_info_legacy() {
 
    if pgrep Xorg > /dev/null &&
       command -v xrandr > /dev/null &&
-      DISPLAY=${DISPLAY:-:0} xrandr --listmonitors &>/dev/null; then
+      DISPLAY=${DISPLAY:-:0} xrandr --listmonitors >/dev/null 2>&1; then
       DISPLAY=${DISPLAY:-:0} xrandr --verbose
       echo
    fi
@@ -171,7 +171,11 @@ OUT=raspinfo.txt
 
 rm -f $OUT
 
-exec > >(tee -ia $OUT)
+# avoid process substition bashism to generate logfile
+PIPE_PATH=$(mktemp -u)
+mkfifo $PIPE_PATH
+tee -ia $OUT < $PIPE_PATH &
+exec > $PIPE_PATH
 
 echo "System Information"
 echo "------------------"

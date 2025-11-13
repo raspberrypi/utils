@@ -308,7 +308,7 @@ foreach my $overlay (@ARGV)
 	}
 	$cur_dt = undef;
 
-	ovstrip($dt) if ($dt->{'plugin'});
+	ovstrip($dt) if ($dt->{'plugin'} && !$no_renumber);
 
 	push @overlays, $dt;
 }

@@ -344,6 +344,7 @@ foreach my $overlay (sort(keys(%$source)))
     }
 
     dormant_checker($overlay);
+    pinctrl_checker($overlay);
 
     my $checker = $overlay_checkers{$overlay};
     ($checker->[0])->($overlay, $checker->[1], $source->{$overlay}) if ($checker);
@@ -938,6 +939,81 @@ sub dormant_checker
     foreach my $frag (sort { $a <=> $b} keys(%is_dormant))
     {
         error("$overlay: fragment $frag is dormant and cannot be activated") if (!$is_wakeable{$frag});
+    }
+}
+
+sub pinctrl_checker
+{
+    my ($overlay) = @_;
+    my $ph;
+    my $fragnum;
+    my $fragdepth = 0;
+    my %pinctrl_refs;
+    my ($label, $node);
+    my %gpio_labels;
+    my %unlabelled_nodes;
+
+    die if (!open($ph, '-|', "ovmerge -N ${overlay}-overlay.dts"));
+    while (my $line = <$ph>)
+    {
+        chomp($line);
+        if ($fragdepth > 0 && $line =~ /\};/) {
+            $fragdepth--;
+            next;
+        }
+        if ($line =~ /\bfragment@(\d+)\s\{/) {
+            $fragnum = $1;
+            $fragdepth = 1;
+        } elsif ($fragdepth == 1) {
+            if ($line =~ /target = <&gpio>/) {
+                $fragdepth++;
+            } else {
+                $fragdepth = 0;
+            }
+        } elsif ($fragdepth == 2) {
+            if ($line =~ /__(?:overlay|dormant)__ \{/) {
+                $fragdepth++;
+            } else {
+                $fragdepth = 0;
+            }
+        } elsif ($fragdepth == 3) {
+            # Must cope with multiple subnodes
+            if ($line =~ /^\s*(?:(\w+): )?([-_0-9a-zA-Z]+) \{/) {
+                $label = $1 // "";
+                $node = $2;
+                $fragdepth++;
+                if ($label) {
+                    $gpio_labels{$label} = 1;
+                } else {
+                    $unlabelled_nodes{$node} = 1;
+                }
+            } else {
+                $fragdepth = 0;
+            }
+        } elsif ($fragdepth == 4) {
+            if ($line =~ /^\s*gpio-hog;/) {
+                delete $unlabelled_nodes{$node};
+            }
+        }
+
+        # The regex is deliberately relaxed to match pinctrl-0 properties
+        # _and_ overrides that target pinctrl-0
+        while ($line =~ /\bpinctrl-0(?: |:\d+)=[^<]+<([^>]+)>/g) {
+            my $refs = $1;
+            while ($refs =~ /&(\w+)/g) {
+                $pinctrl_refs{$1} = 1;
+            }
+        }
+    }
+
+    foreach my $n (sort(keys(%unlabelled_nodes))) {
+        error("$overlay: gpio node $node has no label");
+    }
+
+    foreach my $label (sort(keys(%gpio_labels))) {
+        if (!$pinctrl_refs{$label}) {
+            error("$overlay: gpio node label $label is not referenced");
+        }
     }
 }
 

@@ -445,7 +445,7 @@ static void rp1_pio_sm_set_pindirs_with_mask(PIO pio, uint sm, uint32_t pin_dirs
 
     check_sm_param(sm);
     valid_params_if(PIO, (pin_dirs & GPIOS_MASK) == pin_dirs);
-    valid_params_if(PIO, (pin_mask & pin_mask) == pin_mask);
+    valid_params_if(PIO, (pin_mask & GPIOS_MASK) == pin_mask);
     (void)rp1_ioctl(pio, PIO_IOC_SM_SET_PINDIRS, &args);
 }
 

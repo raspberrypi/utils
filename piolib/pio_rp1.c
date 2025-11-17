@@ -491,7 +491,7 @@ static void rp1_pio_sm_restart_mask(PIO pio, uint32_t mask)
 
 static void rp1_pio_sm_clkdiv_restart(PIO pio, uint sm)
 {
-    struct rp1_pio_sm_restart_args args = { .mask = (1 << sm) };
+    struct rp1_pio_sm_clkdiv_restart_args args = { .mask = (1 << sm) };
     check_sm_param(sm);
     (void)rp1_ioctl(pio, PIO_IOC_SM_CLKDIV_RESTART, &args);
 }

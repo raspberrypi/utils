@@ -348,7 +348,7 @@ int rpi_fw_crypto_hmac_sha256(uint32_t flags, uint32_t key_id, const uint8_t *me
 
     msg.hdr.buf_size = sizeof(msg);
     msg.hdr.tag = TAG_GET_CRYPTO_HMAC_SHA256;
-    msg.hdr.tag_buf_size = 4 + 4 + 4 + message_len; // flags + key_id + length + message
+    msg.hdr.tag_buf_size = sizeof(msg); // Pass the largest possible message + response
     msg.hmac.flags = flags;
     msg.hmac.key_id = key_id;
     msg.hmac.length = message_len;

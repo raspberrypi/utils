@@ -168,7 +168,7 @@ static int cmd_hmac(int argc, char *argv[])
     FILE *f;
     unsigned char hmac[32];
     uint8_t message[RPI_FW_CRYPTO_HMAC_MSG_MAX_SIZE];
-    long file_size;
+    size_t file_size;
     const uint32_t flags = 0;
 
     for (i = 2; i < argc; i++)
@@ -190,21 +190,16 @@ static int cmd_hmac(int argc, char *argv[])
     if (!f)
         goto fail_read;
 
-    if (fseek(f, 0, SEEK_END) != 0)
+    file_size = fread(message, 1, RPI_FW_CRYPTO_HMAC_MSG_MAX_SIZE, f);
+    if ((file_size < RPI_FW_CRYPTO_HMAC_MSG_MAX_SIZE) && ferror(f))
         goto fail_read;
 
-    file_size = ftell(f);
-    if (file_size < 0)
-        goto fail_read;
-
-    if (file_size > RPI_FW_CRYPTO_HMAC_MSG_MAX_SIZE) {
+    // Detect files that are too large (but don't false-positive files that are
+    // exactly MSG_MAX_SIZE large)
+    if (!feof(f) && !(!fread(hmac, 1, 1, f) && feof(f))) {
         fprintf(stderr, "Input file too large (max %d bytes)\n", RPI_FW_CRYPTO_HMAC_MSG_MAX_SIZE);
         goto fail_read;
     }
-    rewind(f);
-
-    if (fread(message, 1, file_size, f) != (size_t)file_size)
-        goto fail_read;
 
     // Calculate HMAC-SHA256 and write the output to a file
     rc = rpi_fw_crypto_hmac_sha256(flags, key_id, message, file_size, hmac);

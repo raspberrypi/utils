@@ -118,9 +118,6 @@ static int write_hex_output_to_stream(FILE *f, const unsigned char *data, size_t
         }
     }
 
-    if (fprintf(f, "\n") < 0)
-        rc = -1;
-
     return rc;
 }
 

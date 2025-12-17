@@ -66,9 +66,10 @@ my $fail = 0;
 while (@ARGV && $ARGV[0] =~ /^-/)
 {
     my $arg = shift @ARGV;
-    if ($arg eq '-v')
+    if ($arg eq '-h')
     {
-        $verbose = 1;
+        usage();
+        exit(0);
     }
     elsif ($arg eq '-s')
     {
@@ -78,11 +79,17 @@ while (@ARGV && $ARGV[0] =~ /^-/)
     {
         $try_all = 1;
     }
+    elsif ($arg eq '-v')
+    {
+        $verbose = 1;
+    }
     else
     {
         fatal_error("Unknown option '$arg'");
     }
 }
+
+my @overlays = @ARGV;
 
 # Aims:
 # * Check that each overlay has an entry in the README
@@ -217,84 +224,6 @@ my $readme = parse_readme("README");
 
 my $source = parse_source_files($overlaysdir, @dtsgroups, @extra_dtsgroups);
 
-# Compare the two
-
-my ($left_only, $common, $right_only) =
-    compare_sets([keys(%$source)], [keys(%$readme)]);
-
-($left_only) = compare_sets($left_only, [keys(%$ignore_missing)]);
-($right_only) = compare_sets($right_only, [keys(%$ignore_vestigial)]);
-
-list_print("Overlays without documentation", $left_only);
-list_print("Vestigial overlay documentation", $right_only);
-
-$fail ||= (@$left_only || @$right_only);
-
-foreach my $overlay (@$common)
-{
-    for (my $i = 0; $i < @{$readme->{$overlay}}; $i++)
-    {
-        my $param = ${$readme->{$overlay}}[$i];
-        if ($documentation->{$param})
-        {
-            my $expansion = $readme->{$param};
-            splice(@{$readme->{$overlay}}, $i, 1, @$expansion);
-            $i += @$expansion - 1;
-        }
-    }
-    my ($l, $b, $r) = compare_sets($source->{$overlay}, $readme->{$overlay});
-    my $rpos = 0;
-    while ($rpos < @$r)
-    {
-        my $rv = $r->[$rpos];
-        if (($rv =~ s/<[i-z]>/[0-9a-fA-F]+/g) ||
-            ($rv =~ s/<[a-h]>/[a-z]/g))
-        {
-            my $lpos = 0;
-            my $found = 0;
-            while ($lpos < @$l)
-            {
-                if ($l->[$lpos] =~ /^$rv$/)
-                {
-                    splice(@$l, $lpos, 1);
-                    $found = 1;
-                }
-                else
-                {
-                    $lpos++;
-                }
-            }
-            splice(@$r, $rpos, 1) if ($found);
-            $rpos++ if (!$found);
-        }
-        else
-        {
-            $rpos++;
-        }
-    }
-
-    ($l) = compare_sets($l, $ignore_missing->{$overlay});
-    ($r) = compare_sets($r, $ignore_vestigial->{$overlay});
-    list_print("$overlay undocumented parameters", $l);
-    list_print("$overlay vestigial parameter documentation", $r);
-
-    $fail ||= (@$l || @$r);
-}
-
-# Parse the Makefile
-
-chdir($overlaysdir);
-
-my $makefile = parse_makefile("Makefile");
-
-($left_only, $common, $right_only) =
-    compare_sets([keys(%$source)], $makefile);
-
-list_print("Overlays missing from the Makefile", $left_only);
-list_print("Vestigial overlay Makefile entries", $right_only);
-
-$fail ||= (@$left_only || @$right_only);
-
 # Now some build/runtime checks
 
 foreach my $group (@dtsgroups, @extra_dtsgroups)
@@ -310,11 +239,93 @@ foreach my $group (@dtsgroups, @extra_dtsgroups)
     }
 }
 
+if (!@overlays) {
+    @overlays = sort(keys(%$source));
+
+    # Compare the two
+
+    my ($left_only, $common, $right_only) =
+        compare_sets(\@overlays, [keys(%$readme)]);
+
+    ($left_only) = compare_sets($left_only, [keys(%$ignore_missing)]);
+    ($right_only) = compare_sets($right_only, [keys(%$ignore_vestigial)]);
+
+    list_print("Overlays without documentation", $left_only);
+    list_print("Vestigial overlay documentation", $right_only);
+
+    $fail ||= (@$left_only || @$right_only);
+
+    foreach my $overlay (@$common)
+    {
+        for (my $i = 0; $i < @{$readme->{$overlay}}; $i++)
+        {
+            my $param = ${$readme->{$overlay}}[$i];
+            if ($documentation->{$param})
+            {
+                my $expansion = $readme->{$param};
+                splice(@{$readme->{$overlay}}, $i, 1, @$expansion);
+                $i += @$expansion - 1;
+            }
+        }
+        my ($l, $b, $r) = compare_sets($source->{$overlay}, $readme->{$overlay});
+        my $rpos = 0;
+        while ($rpos < @$r)
+        {
+            my $rv = $r->[$rpos];
+            if (($rv =~ s/<[i-z]>/[0-9a-fA-F]+/g) ||
+                ($rv =~ s/<[a-h]>/[a-z]/g))
+            {
+                my $lpos = 0;
+                my $found = 0;
+                while ($lpos < @$l)
+                {
+                    if ($l->[$lpos] =~ /^$rv$/)
+                    {
+                        splice(@$l, $lpos, 1);
+                        $found = 1;
+                    }
+                    else
+                    {
+                        $lpos++;
+                    }
+                }
+                splice(@$r, $rpos, 1) if ($found);
+                $rpos++ if (!$found);
+            }
+            else
+            {
+                $rpos++;
+            }
+        }
+
+        ($l) = compare_sets($l, $ignore_missing->{$overlay});
+        ($r) = compare_sets($r, $ignore_vestigial->{$overlay});
+        list_print("$overlay undocumented parameters", $l);
+        list_print("$overlay vestigial parameter documentation", $r);
+
+        $fail ||= (@$l || @$r);
+    }
+
+    # Parse the Makefile
+
+    chdir($overlaysdir);
+
+    my $makefile = parse_makefile("Makefile");
+
+    ($left_only, $common, $right_only) =
+        compare_sets(\@overlays, $makefile);
+
+    list_print("Overlays missing from the Makefile", $left_only);
+    list_print("Vestigial overlay Makefile entries", $right_only);
+
+    $fail ||= (@$left_only || @$right_only);
+}
+
 chdir($overlaysdir);
 
 dtc_cpp("overlay_map.dts", "$TMPDIR/overlay_map.dtb") if (-r "overlay_map.dts");
 
-foreach my $overlay (sort(keys(%$source)))
+foreach my $overlay (@overlays)
 {
     next if ($overlay =~ /^</);
     if (system("ovmerge -q ${overlay}-overlay.dts") >> 8)
@@ -324,7 +335,7 @@ foreach my $overlay (sort(keys(%$source)))
     dtc_cpp("${overlay}-overlay.dts", "$TMPDIR/$overlay.dtbo");
 }
 
-foreach my $overlay (sort(keys(%$source)))
+foreach my $overlay (@overlays)
 {
     next if ($overlay =~ /^</);
     my $overlay_props = $source->{$overlay}[0];
@@ -352,7 +363,7 @@ foreach my $overlay (sort(keys(%$source)))
 
 if ($try_all)
 {
-    foreach my $overlay (sort(keys(%$source)))
+    foreach my $overlay (@overlays)
     {
         next if ($overlay =~ /^</);
         my $overlay_props = $source->{$overlay}[0];
@@ -947,50 +958,67 @@ sub pinctrl_checker
     my ($overlay) = @_;
     my $ph;
     my $fragnum;
-    my $fragdepth = 0;
+    my $depth = 0;
+    my $matchdepth = 0;
     my %pinctrl_refs;
     my ($label, $node);
+    my %fraglabels;
     my %gpio_labels;
     my %unlabelled_nodes;
+    my @overrides;
+    my $in_overrides = 0;
 
     die if (!open($ph, '-|', "ovmerge -N ${overlay}-overlay.dts"));
     while (my $line = <$ph>)
     {
         chomp($line);
-        if ($fragdepth > 0 && $line =~ /\};/) {
-            $fragdepth--;
+        # print("$depth,$matchdepth: $line\n");
+        if ($line =~ /\{$/) {
+            $depth++;
+        }
+        elsif ($line =~ /\};/) {
+            $in_overrides = 0 if ($depth == $in_overrides);
+            $depth--;
+            $matchdepth-- if ($matchdepth);
             next;
         }
-        if ($line =~ /\bfragment@(\d+)\s\{/) {
-            $fragnum = $1;
-            $fragdepth = 1;
-        } elsif ($fragdepth == 1) {
+
+        push @overrides, $line if ($in_overrides);
+
+        $in_overrides = $depth if ($line =~ /^\s*__overrides__ \{/);
+
+        if ($line =~ /(?:(\w+): )?\bfragment@(\d+)\s\{/) {
+            my $label = $1;
+            $fraglabels{$label} = 1 if ($label);
+            $fragnum = $2;
+            $matchdepth = 1;
+        } elsif ($matchdepth == 1) {
             if ($line =~ /target = <&gpio>/) {
-                $fragdepth++;
+                $matchdepth++;
             } else {
-                $fragdepth = 0;
+                $matchdepth = 0;
             }
-        } elsif ($fragdepth == 2) {
+        } elsif ($matchdepth == 2) {
             if ($line =~ /__(?:overlay|dormant)__ \{/) {
-                $fragdepth++;
+                $matchdepth++;
             } else {
-                $fragdepth = 0;
+                $matchdepth = 0;
             }
-        } elsif ($fragdepth == 3) {
+        } elsif ($matchdepth == 3) {
             # Must cope with multiple subnodes
             if ($line =~ /^\s*(?:(\w+): )?([-_0-9a-zA-Z]+) \{/) {
                 $label = $1 // "";
                 $node = $2;
-                $fragdepth++;
+                $matchdepth++;
                 if ($label) {
                     $gpio_labels{$label} = 1;
                 } else {
                     $unlabelled_nodes{$node} = 1;
                 }
             } else {
-                $fragdepth = 0;
+                $matchdepth = 0;
             }
-        } elsif ($fragdepth == 4) {
+        } elsif ($matchdepth == 4) {
             if ($line =~ /^\s*gpio-hog;/) {
                 delete $unlabelled_nodes{$node};
             }
@@ -1002,6 +1030,33 @@ sub pinctrl_checker
             my $refs = $1;
             while ($refs =~ /&(\w+)/g) {
                 $pinctrl_refs{$1} = 1;
+            }
+        }
+    }
+
+    my %bad_labels;
+    foreach my $line (@overrides) {
+        my @elements;
+        if ($line =~ /^\s*([-_a-z0-9]+) = (.*);$/) {
+            my $override = $2;
+            # 1. Split into an array of items, as separated by the commas not within strings.
+
+            while ($override =~ /\G(<[^>]+>|"[^"]*")(?:, |$)/cg) {
+                push @elements, $1;
+            }
+            for (my $i = 1; $i < @elements; $i++) {
+                my $elem = $elements[$i];
+                if ($elem =~ /^"([-_,a-z0-9]+)/) {
+                    my $prop = $1;
+                    my $target = $elements[$i - 1];
+                    if ($target =~ /^<&(\w+)>/) {
+                        my $label = $1;
+                        if ($fraglabels{$label} && $prop !~ /^target(?:-path)?/ && !$bad_labels{$label}) {
+                            error("$overlay: misused fragment label $label");
+                            $bad_labels{$label} = 1;
+                        }
+                    }
+                }
             }
         }
     }
@@ -1027,4 +1082,15 @@ sub fatal_error
 {
     error(@_);
     exit(1);
+}
+
+sub usage
+{
+    print("Usage: overlaycheck [<opts>] [<overlay> ...]\n");
+    print("  where <opts> can be any of:\n");
+    print("\n");
+    print("    -h  Show this help message\n");
+    print("    -s  Show more strict/picky warnings\n");
+    print("    -t  Try all overlays on all base files\n");
+    print("    -v  Enable verbose output\n");
 }

@@ -87,6 +87,7 @@ splice(@args, @args - @ARGV);
 my $simple_mode = !($dtc_opt || $in_fmt || $out_file);
 
 my $in_file = $ARGV[0];
+$in_file = $in_file."-overlay.dts" if ($in_file !~ /\.dts$/ && -r $in_file."-overlay.dts");
 if (!$out_file)
 {
     $out_file = $ARGV[1];

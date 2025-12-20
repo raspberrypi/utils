@@ -161,12 +161,12 @@ if [ ! -d "$SYS/$BUS-00$ADDR" ]; then
 	echo "$TYPE 0x$ADDR" > $SYS/new_device
 fi
 
-DD_VERSION=$(dd --version 2>&1 | grep coreutils | sed -e 's/\.//' | cut -d' ' -f 3)
+DD_VERSION=$(dd --version 2>&1 | grep coreutils | cut -d' ' -f 3)
 if [ -z "$DD_VERSION" ]; then
 	# probably busybox's dd
 	DD_STATUS=""
 else
-	if [ "$DD_VERSION" -ge 824 ]; then
+	if awk "BEGIN {exit !($DD_VERSION >= 8.24)}"; then
 		DD_STATUS="status=progress"
 	else
 		DD_STATUS="status=none"

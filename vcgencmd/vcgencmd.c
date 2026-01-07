@@ -105,8 +105,8 @@ static unsigned gencmd(int file_desc, const char *command, char *result, int res
    p[0] = i*sizeof *p; // actual size
 
    mbox_property(file_desc, p);
-   result[0] = 0;
-   strncat(result, (const char *)(p+6), result_len);
+   memcpy(result, p+6, result_len);
+   result[result_len -1] = '\0';
 
    return p[5];
 }

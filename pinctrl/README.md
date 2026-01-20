@@ -21,6 +21,8 @@ The improvements over raspi-gpio include:
 * Splitting into a general gpiolib library and a separate client application
   allows new applications to be added easily.
 
+Documentation for gpiolib is provided [here](gpiolib.md).
+
 **Build Instructions**
 
 Install the prerequisites with "sudo apt install cmake" - you need at least version 3.10 of cmake. Run the following commands, either here or in the top-level directory to build and install everything:

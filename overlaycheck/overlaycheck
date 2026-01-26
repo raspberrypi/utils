@@ -908,7 +908,7 @@ sub dormant_checker
         chomp($line);
         if ($in_overrides)
         {
-            if ($line =~ /}/)
+            if ($line =~ /^\s*};/)
             {
                 $in_overrides = 0;
             }
@@ -933,15 +933,15 @@ sub dormant_checker
                 }
             }
         }
-        elsif ($line =~ /\bfragment@(\d+)\s\{/)
+        elsif ($line =~ /\bfragment@(\d+)\s\{$/)
         {
             $fragnum = $1;
         }
-        elsif ($line =~ /\b__dormant__\b/)
+        elsif ($line =~ /\b__dormant__ \{$/)
         {
             $is_dormant{$fragnum} = 1;
         }
-        elsif ($line =~ /\b__overrides__\b/)
+        elsif ($line =~ /\b__overrides__ \{$/)
         {
             $in_overrides = 1;
         }

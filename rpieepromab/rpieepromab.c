@@ -188,9 +188,9 @@ const char *rpi_eeprom_ab_update_strerror(RPI_EEPROM_AB_ERROR error) {
     case RPI_EEPROM_AB_ERROR_NO_ERROR:
         return "Success";
     case RPI_EEPROM_AB_ERROR_FAILED:
-        return "Unknown error";
+        return "Unknown error. Please check you are running a firmware version that supports AB.";
     case RPI_EEPROM_AB_ERROR_INVALID_PARTITION:
-        return "Invalid partition";
+        return "Invalid partition selected";
     case RPI_EEPROM_AB_ERROR_HASH_MISMATCH:
         return "Hash mismatch";
     case RPI_EEPROM_AB_ERROR_BUSY:
@@ -210,11 +210,11 @@ const char *rpi_eeprom_ab_update_strerror(RPI_EEPROM_AB_ERROR error) {
     case RPI_EEPROM_AB_ERROR_ALREADY_COMMITTED:
         return "Already committed";
     case RPI_EEPROM_AB_ERROR_SPI_GPIO_ERROR:
-        return "SPI GPIO Error. nospi dtoverlay is required";
+        return "SPI GPIO Error. Please enable AB Firmware in raspi-config.";
     case RPI_EEPROM_AB_ERROR_NO_PARTITIONING:
-        return "AB Partitioning is not being used";
+        return "AB Partitioning is not being used. Perform an AB update to enable AB partitioning.";
     default:
-        return "Unrecognized error";
+        return "Unrecognised error";
     }
 }
 
@@ -230,7 +230,7 @@ const char *rpi_eeprom_ab_update_strstatus(RPI_EEPROM_AB_UPDATE_RC_STATUS status
     case RPI_EEPROM_AB_UPDATE_RC_SUCCSESS:
         return "Success";
     default:
-        return "Unrecognized status code";
+        return "Unrecognised status code";
     }
 }
 

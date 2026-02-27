@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-#define RPI_EEPROM_AB_UPDATE_PACKET_MAX_SIZE  (512 * 1024)
+#define RPI_EEPROM_AB_UPDATE_PACKET_MAX_SIZE  (256 * 1024)
 #define RPI_EEPROM_AB_PARTITION_SIZE          (988 * 1024)
 #define RPI_EEPROM_A_PARTITION_START_ADDRESS  (64 * 1024)
 #define RPI_EEPROM_B_PARTITION_START_ADDRESS  (RPI_EEPROM_A_PARTITION_START_ADDRESS + RPI_EEPROM_AB_PARTITION_SIZE)
@@ -186,9 +186,10 @@ RPI_EEPROM_AB_ERROR rpi_eeprom_ab_update_commit_current_partition(void);
  *
  * @param update_data Pointer to the update data
  * @param update_len The length of the update data
+ * @param print_progress Whether to print a basic progress indicator
  * @return 0 on success
  */
-RPI_EEPROM_AB_ERROR rpi_eeprom_ab_write_eeprom_update(uint8_t *update_data, uint32_t update_len);
+RPI_EEPROM_AB_ERROR rpi_eeprom_ab_write_eeprom_update(uint8_t *update_data, uint32_t update_len, int print_progress);
 
 /**
  * Read the entire EEPROM and store the data in the buffer.

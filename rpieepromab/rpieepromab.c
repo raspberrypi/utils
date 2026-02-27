@@ -82,7 +82,8 @@ struct firmware_update_get_status_msg {
 /* Command codes */
 typedef enum {
     RPI_EEPROM_AB_UPDATE_CANCEL            = 0,
-    RPI_EEPROM_AB_UPDATE_START_WRITE       = 1,
+    RPI_EEPROM_AB_UPDATE_START_WRITE       = 1, // Used by old beta firmware version 2025-02-11
+    RPI_EEPROM_AB_UPDATE_START_ERASE       = 2,
 } RPI_EEPROM_AB_UPDATE_COMMAND_CODE;
 
 /* Message structure to send EEPROM update command to firmware mailbox */
@@ -184,6 +185,8 @@ static int mbox_property(int file_desc, void *msg) {
 
 /* Get the error string for the error code */
 const char *rpi_eeprom_ab_update_strerror(RPI_EEPROM_AB_ERROR error) {
+    static char buf[40];
+
     switch (error) {
     case RPI_EEPROM_AB_ERROR_NO_ERROR:
         return "Success";
@@ -214,7 +217,8 @@ const char *rpi_eeprom_ab_update_strerror(RPI_EEPROM_AB_ERROR error) {
     case RPI_EEPROM_AB_ERROR_NO_PARTITIONING:
         return "AB Partitioning is not being used. Perform an AB update to enable AB partitioning.";
     default:
-        return "Unrecognised error";
+        snprintf(buf, sizeof(buf), "Unrecognised error: %d", error);
+        return buf;
     }
 }
 
@@ -595,15 +599,28 @@ RPI_EEPROM_AB_ERROR rpi_eeprom_ab_update_get_eeprom_partition(RPI_EEPROM_AB_PART
 }
 
 /* Send the update data to firmware mailbox and start the write to the EEPROM */
-RPI_EEPROM_AB_ERROR rpi_eeprom_ab_write_eeprom_update(uint8_t *update_data, uint32_t update_len) {
+RPI_EEPROM_AB_ERROR rpi_eeprom_ab_write_eeprom_update(uint8_t *update_data, uint32_t update_len, int print_progress) {
     RPI_EEPROM_AB_ERROR err;
     uint8_t message[RPI_EEPROM_AB_UPDATE_PACKET_MAX_SIZE];
     uint32_t sent_len = 0;
+    int attempt;
     int packet_length = RPI_EEPROM_AB_UPDATE_PACKET_MAX_SIZE;
 
     if (!update_data || update_len == 0 || update_len > RPI_EEPROM_AB_PARTITION_SIZE) {
         LOG_DEBUG("Invalid update length\n");
-        return RPI_EEPROM_AB_ERROR_INVALID_ARG;
+        return RPI_EEPROM_AB_ERROR_LENGTH;
+    }
+
+    // Start the erase of the EEPROM
+    err = rpi_eeprom_ab_update_send_command(RPI_EEPROM_AB_UPDATE_START_ERASE);
+    if (err != RPI_EEPROM_AB_ERROR_NO_ERROR) {
+        if (err == RPI_EEPROM_AB_ERROR_INVALID_ARG) {
+            LOG_DEBUG("Invalid arg returned. Assume it's old beta firmware version 2025-02-11 and continue...\n");
+        } else {
+            LOG_DEBUG("Failed to start erase of EEPROM: %s\n",
+                rpi_eeprom_ab_update_strerror(err));
+            return err;
+        }
     }
 
     while (sent_len < update_len) {
@@ -612,23 +629,72 @@ RPI_EEPROM_AB_ERROR rpi_eeprom_ab_write_eeprom_update(uint8_t *update_data, uint
         }
         memcpy(message, update_data + sent_len, packet_length);
 
-        err = rpi_eeprom_ab_update_packet_write(sent_len, message,
-            packet_length);
+        for (attempt = 0; attempt < 7; attempt++) {
+            err = rpi_eeprom_ab_update_packet_write(sent_len, message,
+                packet_length);
+
+            if (print_progress) {
+                printf(".");
+                fflush(stdout);
+            }
+
+            if (err == RPI_EEPROM_AB_ERROR_NO_ERROR) {
+                break;
+            } else if (err == RPI_EEPROM_AB_ERROR_BUSY) {
+                LOG_DEBUG("EEPROM is busy, retrying...\n");
+                continue;
+            } else if (err != RPI_EEPROM_AB_ERROR_NO_ERROR) {
+                LOG_DEBUG("Failed to send to EEPROM: %s\n",
+                    rpi_eeprom_ab_update_strerror(err));
+                return err;
+            }
+        }
         if (err != RPI_EEPROM_AB_ERROR_NO_ERROR) {
             LOG_DEBUG("Failed to send to EEPROM: %s\n",
                 rpi_eeprom_ab_update_strerror(err));
             return err;
         }
+
         sent_len += packet_length;
     }
-    
-    // Start the write to the EEPROM
+
+    // For old beta firmware version 2025-02-11, start the write to the EEPROM
+    // Not required for later versions
     err = rpi_eeprom_ab_update_send_command(RPI_EEPROM_AB_UPDATE_START_WRITE);
-    if (err != RPI_EEPROM_AB_ERROR_NO_ERROR) {
-        LOG_DEBUG("Failed to start write to EEPROM: %s\n",
-            rpi_eeprom_ab_update_strerror(err));
-        return err;
+    if (err == RPI_EEPROM_AB_ERROR_NO_ERROR) {
+        RPI_EEPROM_AB_UPDATE_RC_STATUS status;
+        RPI_EEPROM_AB_ERROR firmware_error;
+        uint32_t _spi_gpio_check;
+        uint32_t _using_partitioning;
+
+        // Wait for the write to complete
+        int delay = 0;
+        while (delay < 20) {
+
+            err = rpi_eeprom_ab_update_get_status(&status, &firmware_error,
+                &_spi_gpio_check, &_using_partitioning);
+            if (err != RPI_EEPROM_AB_ERROR_NO_ERROR) {
+                LOG_DEBUG("Failed to get status: %s\n",
+                    rpi_eeprom_ab_update_strerror(err));
+                return err;
+            }
+            if (status == RPI_EEPROM_AB_UPDATE_RC_SUCCSESS) {
+                break;
+            }
+            delay++;
+            if (print_progress) {
+                printf(".");
+                fflush(stdout);
+            }
+            usleep(100000);
+        }
+        if ((delay >= 10) && (status != RPI_EEPROM_AB_UPDATE_RC_SUCCSESS)) {
+            printf("\nWaiting for write to EEPROM is taking too long. It will continue in the background.\n");
+            printf("You can check the status (Busy or Success) of the write with 'rpi-eeprom-ab update-status'\n");
+            return RPI_EEPROM_AB_ERROR_WRITE;
+        }
     }
+
     return RPI_EEPROM_AB_ERROR_NO_ERROR;
 }
 

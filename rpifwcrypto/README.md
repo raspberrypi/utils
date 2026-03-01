@@ -33,10 +33,17 @@ Install prerequisites with "sudo apt install cmake libgnutls28-dev"" - you need 
 * rpi-fw-crypto get-key-status 1                                                (Gets the status of key-id 1)
 * rpi-fw-crypto set-key-status 1 LOCKED                                         (Blocks the raw OTP read API on this key until the device is rebooted)
 * rpi-fw-crypto hmac --in message.bin --key-id 1 --out hmac.bin                 (Generates the SHA256 HMAC of message.bin and OTP key id 1)
+* rpi-fw-crypto pubkey --key-id 1 --out device-pub.der                          (Derives and retrieves the corresponding public key for the specified device private ECDSA P256 key)
+* rpi-fw-crypto privkey --key-id 1 --out device-priv.der                        (Retrieves the device private key - in DER form - will error if key status is locked)
+* rpi-fw-crypto getnkey --key-id 1 --alg ec                                     (Generates an ECDSA P256 key-pair and writes the private key to the OTP)
 
 ** Notes **
-The device unique private key can be provisioned with the `rpi-otp-private-key` utility.
+The device unique private key can also be provisioned with the `rpi-otp-private-key` utility.
 This MUST be a raw ECDSA P-256 key and not just a random number.
+
+Access to the device private key can be locked by default at boot by setting lock_device_private_key=1 in config.txt.
+The contents of config.txt (within boot.img) is authenticated by the firmware if secure-boot is enabled and
+lock_device_private_key=1 should always be specified if secure-boot is enabled.
 
 This service is not a hardware security module and the current implementation
 does not protect the key and/or OTP from being accessed directly with root level privileges.

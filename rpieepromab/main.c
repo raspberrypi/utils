@@ -44,7 +44,8 @@ static void usage(const char *progname, int exit_status) {
         "                                 selections and their hashes\n"
         "  status-at-boot                 Get the partition used at boot and the\n"
         "                                 committed status at boot\n"
-        "  help                           Show this help message\n",
+        "  help                           Show this help message\n"
+        "  version                        Show version information\n",
         progname);
     exit(exit_status);
 }
@@ -258,6 +259,12 @@ int main(int argc, char *argv[]) {
             strcmp(argv[1], "-h") == 0 || 
             strcmp(argv[1], "help") == 0) {
         usage(argv[0], 0);
+        return 0;
+    } else if (strcmp(argv[1], "--version") == 0 ||
+            strcmp(argv[1], "-v") == 0 ||
+            strcmp(argv[1], "version") == 0) {
+        printf("rpi-eeprom-ab %s\n", VERSION_STRING);
+        printf("librpieepromab %s\n", rpi_eeprom_ab_version());
         return 0;
     } else if (strcmp(argv[1], "update") == 0) {
         // Update the EEPROM partition with the contents of the file

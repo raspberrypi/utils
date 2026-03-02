@@ -48,6 +48,13 @@ typedef enum {
 } RPI_EEPROM_RELATIVE_PARTITION;
 
 /**
+ * Get the library version string.
+ *
+ * @return The version string (e.g., "0.1.0")
+ */
+const char *rpi_eeprom_ab_version(void);
+
+/**
  * Get the error string for the error code.
  *
  * @param error The error code

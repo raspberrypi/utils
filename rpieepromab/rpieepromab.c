@@ -183,6 +183,11 @@ static int mbox_property(int file_desc, void *msg) {
     return 0;
 }
 
+/* Get the library version string */
+const char *rpi_eeprom_ab_version(void) {
+    return LIBRPIEEPROMAB_VERSION;
+}
+
 /* Get the error string for the error code */
 const char *rpi_eeprom_ab_update_strerror(RPI_EEPROM_AB_ERROR error) {
     static char buf[40];

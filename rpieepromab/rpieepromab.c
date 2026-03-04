@@ -663,7 +663,7 @@ RPI_EEPROM_AB_ERROR rpi_eeprom_ab_write_eeprom_update(uint8_t *update_data, uint
         sent_len += packet_length;
     }
 
-    // For old beta firmware version 2025-02-11, start the write to the EEPROM
+    // For old beta firmware version 2026-02-11, start the write to the EEPROM
     // Not required for later versions
     err = rpi_eeprom_ab_update_send_command(RPI_EEPROM_AB_UPDATE_START_WRITE);
     if (err == RPI_EEPROM_AB_ERROR_NO_ERROR) {
@@ -674,7 +674,7 @@ RPI_EEPROM_AB_ERROR rpi_eeprom_ab_write_eeprom_update(uint8_t *update_data, uint
 
         // Wait for the write to complete
         int delay = 0;
-        while (delay < 20) {
+        while (delay < 60) {
 
             err = rpi_eeprom_ab_update_get_status(&status, &firmware_error,
                 &_spi_gpio_check, &_using_partitioning);
@@ -691,9 +691,9 @@ RPI_EEPROM_AB_ERROR rpi_eeprom_ab_write_eeprom_update(uint8_t *update_data, uint
                 printf(".");
                 fflush(stdout);
             }
-            usleep(100000);
+            sleep(1);
         }
-        if ((delay >= 10) && (status != RPI_EEPROM_AB_UPDATE_RC_SUCCSESS)) {
+        if ((delay >= 60) && (status != RPI_EEPROM_AB_UPDATE_RC_SUCCSESS)) {
             printf("\nWaiting for write to EEPROM is taking too long. It will continue in the background.\n");
             printf("You can check the status (Busy or Success) of the write with 'rpi-eeprom-ab update-status'\n");
             return RPI_EEPROM_AB_ERROR_WRITE;

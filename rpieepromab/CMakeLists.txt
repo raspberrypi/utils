@@ -4,7 +4,7 @@ include(GNUInstallDirs)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror")
 
 # Set project name and version
-project(rpieepromab VERSION 0.2.0)
+project(rpieepromab VERSION 0.2.1)
 
 # Get git hash for version string
 find_package(Git QUIET)
@@ -17,10 +17,11 @@ if(GIT_FOUND)
         ERROR_QUIET
     )
 endif()
-if(NOT GIT_HASH)
-    set(GIT_HASH "unknown")
+if(GIT_HASH)
+    set(VERSION_FULL "${PROJECT_VERSION} \(${GIT_HASH}\)")
+else()
+    set(VERSION_FULL "${PROJECT_VERSION}")
 endif()
-set(VERSION_FULL "${PROJECT_VERSION} \(${GIT_HASH}\)")
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 

@@ -5,6 +5,8 @@ A collection of scripts and simple applications
     Tree files (`*.dtb`). Also includes the `dtoverlay` and `dtparam` utilities.
 * [eeptools](eeptools/) - Tools for creating and managing EEPROMs for HAT+ and HAT board.
 * [kdtc](kdtc/) - A tool for compiling overlays with #includes, etc., as used in the kernel tree.
+* [otamaker](otamaker/) - A tool for building Remote Update artefacts, as used by Raspberry
+    Pi Connect Remote Update.
 * [otpset](otpset/) - A short script to help with reading and setting the customer OTP
     bits.
 * [overlaycheck](overlaycheck/) - A tool for validating the overlay files and README in a

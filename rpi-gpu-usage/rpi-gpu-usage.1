@@ -1,0 +1,29 @@
+.TH RPI-GPU-USAGE 1 "2025" "raspi-utils" "Raspberry Pi Utilities"
+.SH NAME
+rpi-gpu-usage \- monitor VideoCore GPU block utilisation
+.SH SYNOPSIS
+.B rpi-gpu-usage
+.RI [ options ]
+.SH DESCRIPTION
+.B rpi-gpu-usage
+monitors the VideoCore GPU block utilisation on Raspberry Pi 4/5.
+It reads per-process GPU engine times from DRM fdinfo and global
+utilisation from the V3D gpu_stats sysfs interface.
+.PP
+The display is refreshed once per second, showing per-client
+GPU engine usage (render, tfu, bin) and CPU usage.
+.SH OPTIONS
+.TP
+.B \-\-csv
+Output in CSV format instead of a formatted table.
+Suitable for piping to a file for later analysis.
+.TP
+.B \-\-help
+Show usage information and exit.
+.SH EXAMPLES
+.nf
+sudo rpi-gpu-usage                      # interactive terminal display
+sudo rpi-gpu-usage --csv > gpu.csv      # log CSV to file
+.fi
+.SH SEE ALSO
+.BR vcgencmd (1)

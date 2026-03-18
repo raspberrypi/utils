@@ -20,11 +20,16 @@ A collection of scripts and simple applications
 * [piolib](piolib/) - A library for accessing the Pi 5's PIO hardware.
 * [raspinfo](raspinfo/) - A short script to dump information about the Pi. Intended for
     the submission of bug reports.
+* [rpieepromab](rpieepromab/) - A tool to update and manage the AB EEPROM partitions
+    on a device in the Pi 5 family.
 * [rpifwcrypto](rpifwcrypto/) - A command line application and shared library for the
     firmware cryptography service. Intended for use with Raspberry Pi Connect and
     secure-boot provisioner.
+* [vcgencmd](vcgencmd/) - A tool to send commands to the VideoCore firmware and
+    display the results.
 * [vclog](vclog/) - A tool to get VideoCore 'assert' or 'msg' logs
     with optional -f to wait for new logs to arrive.
+* [vcmailbox](vcmailbox/) - A low-level tool giving access the VideoCore mailbox interface.
 
 
 **Build Instructions**

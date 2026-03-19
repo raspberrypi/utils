@@ -25,6 +25,8 @@ A collection of scripts and simple applications
 * [rpifwcrypto](rpifwcrypto/) - A command line application and shared library for the
     firmware cryptography service. Intended for use with Raspberry Pi Connect and
     secure-boot provisioner.
+* [rpi-gpu-usage](rpi-gpu-usage/) - A tool for showing the per-process usage of the V3D GPU
+    on Raspberry Pi 4 and 5.
 * [vcgencmd](vcgencmd/) - A tool to send commands to the VideoCore firmware and
     display the results.
 * [vclog](vclog/) - A tool to get VideoCore 'assert' or 'msg' logs

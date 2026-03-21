@@ -36,7 +36,7 @@ A collection of scripts and simple applications
 
 **Build Instructions**
 
-Install the prerequisites with "sudo apt install cmake device-tree-compiler libfdt-dev libgnutls28-dev" - you need at least version 3.10 of cmake. Run the following commands to build and install everything, or see the README files in the subdirectories to just build utilities individually:
+Install the prerequisites with "sudo apt install cmake device-tree-compiler libncurses-dev libfdt-dev libgnutls28-dev" - you need at least version 3.10 of cmake. Run the following commands to build and install everything, or see the README files in the subdirectories to just build utilities individually:
 
  - *cmake .*
     N.B. Use *cmake -DBUILD_SHARED_LIBS=1 .* to build the libraries in the subprojects (libdtovl, gpiolib and piolib) as shared (as opposed to static) libraries.

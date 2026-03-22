@@ -23,8 +23,11 @@
 /* Mailbox channel for property interface */
 #define MBOX_CHAN_PROPERTY 8
 
-/* VideoCore mailbox error flag */
-#define VC_MAILBOX_ERROR 0x80000000
+/* VideoCore mailbox error flag, by convention set on status 0 of property */
+#define VC_MAILBOX_ERROR     0x80000000
+
+/* VideoCore sets most significant bit to indicate that the code/len has been set by the firmware */
+#define VC_MAILBOX_COMPLETE  0x80000000
 
 /* Crypto-related mailbox tags */
 typedef enum {
@@ -152,8 +155,10 @@ static int mbox_property(int file_desc, void *msg)
 {
     struct firmware_msg_header *hdr = (struct firmware_msg_header *)msg;
     int rc = ioctl(file_desc, IOCTL_MBOX_PROPERTY, msg);
-    if (rc < 0)
+    if (rc < 0) {
         fprintf(stderr, "ioctl_mbox_property failed: %d\n", rc);
+        return rc;
+    }
 
     LOG_DEBUG("msg.hdr.code: %08x\n", hdr->code);
     LOG_DEBUG("msg.hdr.buf_size: %d\n", hdr->buf_size);
@@ -161,8 +166,8 @@ static int mbox_property(int file_desc, void *msg)
     LOG_DEBUG("msg.hdr.tag_buf_size: %d\n", hdr->tag_buf_size);
     LOG_DEBUG("msg.hdr.tag_req_resp_size: %d\n", hdr->tag_req_resp_size);
 
-    if (!(hdr->code & VC_MAILBOX_ERROR) ||
-        !(hdr->tag_req_resp_size & VC_MAILBOX_ERROR))
+    if (!(hdr->code & VC_MAILBOX_COMPLETE) ||
+        !(hdr->tag_req_resp_size & VC_MAILBOX_COMPLETE))
         return -1;
 
     return 0;

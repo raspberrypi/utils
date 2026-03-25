@@ -135,9 +135,9 @@ artefact:
   version: 1.0
   device_type: rpi
 
-payloads:
-- name: blinky
-  type: script
+  payloads:
+  - name: blinky
+    type: script
 ```
 Now we can create the artefact:
 ```
@@ -169,11 +169,11 @@ artefact:
   version: 1.0.3
   device_type: rpi
 
-payloads:
-- name: boot          # work/image-myapp-1.0.3/boot.sparse
-  type: image-sparse
-- name: system        # work/image-myapp-1.0.3/system.sparse
-  type: image-sparse
+  payloads:
+  - name: boot          # work/image-myapp-1.0.3/boot.sparse
+    type: image-sparse
+  - name: system        # work/image-myapp-1.0.3/system.sparse
+    type: image-sparse
 ```
 This artefact YAML file is designed to be used from root of the rpi-image-gen repository - you could also drop the paths, keeping `boot.sparse` and `system.sparse`, and run `otamaker` from within the `work/image-myapp-1.0.3` directory (or your equivalent). Here's the output it generated:
 ```

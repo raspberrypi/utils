@@ -156,7 +156,7 @@ static int read_clients(struct client *clients)
             if (fde->d_name[0] == '.')
                 continue;
 
-            char fpath[256];
+            char fpath[384];
             snprintf(fpath, sizeof(fpath), "%s/%s", fdinfo_path,
                      fde->d_name);
             FILE *f = fopen(fpath, "r");

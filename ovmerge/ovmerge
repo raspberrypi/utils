@@ -670,7 +670,7 @@ sub dtparam
 			if ($decl =~ /^([-a-zA-Z0-9_,]+)([.;:#])(\d+)(?:(=|\{)(.*))?$/)
 			{
 				# Integer parameter
-				my ($prop, $type, $offset, $op, $opdata) = ($1, $2, $3, $4 || '', $5);
+				my ($prop, $type, $offset, $op, $opdata) = ($1, $2, $3, $4 // '', $5);
 				my $size = $elem_sizes{$type};
 				my $val = $value;
 				if ($op eq '=')
@@ -722,7 +722,7 @@ sub dtparam
 			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)([\?\!])(?:(=|\{)(.*))?$/)
 			{
 				# boolean
-				my ($prop, $sense, $op, $opdata) = ($1, $2, $3 || '', $4);
+				my ($prop, $sense, $op, $opdata) = ($1, $2, $3 // '', $4);
 				my $val = $value;
 				if ($op eq '=')
 				{
@@ -759,7 +759,7 @@ sub dtparam
 			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)\[(?:(=|\{)(.*))?$/)
 			{
 				# byte array
-				my ($prop, $op, $opdata) = ($1, $2 || '', $3);
+				my ($prop, $op, $opdata) = ($1, $2 // '', $3);
 				my $val = $value;
 				if ($op eq '=')
 				{
@@ -777,7 +777,7 @@ sub dtparam
 			elsif ($decl =~ /^([-a-zA-Z0-9_,]+)(?:(=|\{)(.*))?$/)
 			{
 				# string
-				my ($prop, $op, $opdata) = ($1, $2 || '', $3);
+				my ($prop, $op, $opdata) = ($1, $2 // '', $3);
 				my $val = $value;
 				if ($op eq '=')
 				{
@@ -821,7 +821,7 @@ sub dtparam
 			while ($decl =~ /\G([=!+-])(\d+)/g)
 			{
 				my ($op, $num) = ($1, $2);
-				my $frag = get_node($dt, '/fragment-'.$num) || get_node($dt, '/fragment@'.$num);
+				my $frag = get_node($dt, '/fragment-'.$num) // get_node($dt, '/fragment@'.$num);
 				die "* Param $param: no fragment $num\n" if (!$frag);
 				if (defined $value)
 				{
@@ -1075,7 +1075,7 @@ sub parse_node
 
 	my $next = match($state, '{');
 
-	$node = (get_child($parent, $node) || add_node($parent, $node)) if (!ref $node);
+	$node = (get_child($parent, $node) // add_node($parent, $node)) if (!ref $node);
 
 	printf("parse_node(%s, %d ...)\n", $node->[0], $depth) if ($trace_parse);
 
@@ -1419,7 +1419,7 @@ sub read_tokens
 		elsif ($line =~ /^\s*#define\s+(\w+)(?:\s+([^\r\n]+))?/)
 		{
 			my $symbol = $1;
-			my $val = $2 || '';
+			my $val = $2 // '';
 
 			$val =~ s/\/\/.*//;
 			$val =~ s/\s+$//;
@@ -1720,7 +1720,7 @@ sub add_node
 {
 	my ($parent, $name) = @_;
 	my $node = (ref $name) ? $name : new_node($name);
-	printf("[ add_node %s -> %s ]\n", $node->[0] || "?", $parent ? $parent->[0] : "-") if ($trace_tree);
+	printf("[ add_node %s -> %s ]\n", $node->[0] // "?", $parent ? $parent->[0] : "-") if ($trace_tree);
 	$node->[4] = $parent;
 	if ($parent)
 	{

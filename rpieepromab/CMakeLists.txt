@@ -4,7 +4,7 @@ include(GNUInstallDirs)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror")
 
 # Set project name and version
-project(rpieepromab VERSION 0.2.1)
+project(rpieepromab VERSION 0.2.2)
 
 # Get git hash for version string
 find_package(Git QUIET)

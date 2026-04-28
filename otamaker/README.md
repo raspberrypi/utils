@@ -58,15 +58,15 @@ artefact:
   description: A vital update recommended to all users
   device_type: rpi5
 
-payloads:
-- name: boot          # boot.sparse
-  type: image-sparse
-- name: system        # system.sparse
-  type: image-sparse
-- name: installdata.tgz
-  type: tmpfile
-- name: installer
-  type: script
+  payloads:
+  - name: boot          # boot.sparse
+    type: image-sparse
+  - name: system        # system.sparse
+    type: image-sparse
+  - name: installdata.tgz
+    type: tmpfile
+  - name: installer
+    type: script
 ```
 
 Any fields and payload types which aren't recognised are ignored. However, an error is returned if an update doesn't either write to at least one filesystem or include a script.

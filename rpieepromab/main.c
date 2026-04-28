@@ -116,6 +116,11 @@ static int cmd_write_eeprom_update(int argc, char *argv[]) {
 
     fclose(f);
 
+    if (memcmp(update_data + 8, "bootsys", 7) != 0) {
+        printf("Invalid AB update file.\n");
+        return -1;
+    }
+
     // Cancel any existing update
     err = rpi_eeprom_ab_update_cancel();
     if (err != RPI_EEPROM_AB_ERROR_NO_ERROR) {

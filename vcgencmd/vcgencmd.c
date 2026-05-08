@@ -37,9 +37,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #include <sys/ioctl.h>		/* ioctl */
 
-#define DEVICE_FILE_NAME "/dev/vcio"
-#define MAJOR_NUM 100
-#define IOCTL_MBOX_PROPERTY _IOWR(MAJOR_NUM, 0, char *)
+#define countof(x) (sizeof x/sizeof *x)
+
+#define VCIO_IOC_MAGIC 100
+#define IOCTL_MBOX_PROPERTY _IOWR(VCIO_IOC_MAGIC, 0, char *)
 
 #define MAX_STRING 1024
 
@@ -61,15 +62,18 @@ static int mbox_property(int file_desc, void *buf)
 static int mbox_open()
 {
    int file_desc;
-
+   const char *devices[] = {"/dev/vcio_gencmd", "/dev/vcio"};
+   int i;
    // open a char device file used for communicating with kernel mbox driver
-   file_desc = open(DEVICE_FILE_NAME, 0);
-   if (file_desc < 0) {
-      printf("Can't open device file: %s\n", DEVICE_FILE_NAME);
-      printf("Try creating a device file with: sudo mknod %s c %d 0\n", DEVICE_FILE_NAME, MAJOR_NUM);
-      exit(-1);
+   // first try the more restrictive interface but fall back to full if unavailable
+   for (i=0; i<countof(devices); i++)
+   {
+      file_desc = open(devices[i], 0);
+      if (file_desc >= 0)
+         return file_desc;
    }
-   return file_desc;
+   printf("Can't open device file: %s\n", devices[0]);
+   exit(-1);
 }
 
 static void mbox_close(int file_desc) {

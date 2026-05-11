@@ -32,6 +32,8 @@ Install prerequisites with "sudo apt install cmake libgnutls28-dev"" - you need 
 * rpi-fw-crypto sign --in message.bin --key-id 1 --alg ec --out sig.bin         (Signs message.bin with the device unique OTP key (id 1))
 * rpi-fw-crypto get-key-status 1                                                (Gets the status of key-id 1)
 * rpi-fw-crypto set-key-status 1 LOCKED                                         (Blocks the raw OTP read API on this key until the device is rebooted)
+* rpi-fw-crypto get-key-usage 1                                                 (Gets the usage of key-id 1)
+* rpi-fw-crypto set-key-usage 1 0x1                                             (Sets the usage of key-id 1 to RPI_CONNECT in OTP)
 * rpi-fw-crypto hmac --in message.bin --key-id 1 --out hmac.bin                 (Generates the SHA256 HMAC of message.bin and OTP key id 1)
 * rpi-fw-crypto pubkey --key-id 1 --out device-pub.der                          (Derives and retrieves the corresponding public key for the specified device private ECDSA P256 key)
 * rpi-fw-crypto privkey --key-id 1 --out device-priv.der                        (Retrieves the device private key - in DER form - will error if key status is locked)

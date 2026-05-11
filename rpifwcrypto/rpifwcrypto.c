@@ -41,6 +41,8 @@ typedef enum {
     TAG_GET_CRYPTO_PUBLIC_KEY      = 0x00030093,    // Get public key
     TAG_GET_CRYPTO_PRIVATE_KEY     = 0x00030094,    // Get private key
     TAG_GET_CRYPTO_GEN_ECDSA_KEY   = 0x00030095,    // Generate ECDSA key
+    TAG_GET_CRYPTO_KEY_USAGE       = 0x0003009c,    // Get key usage
+    TAG_SET_CRYPTO_KEY_USAGE       = 0x0003809c,    // Set key usage
 } RPI_FW_CRYPTO_TAG;
 
 /* Common header structure for firmware mailbox messages */
@@ -309,6 +311,35 @@ const char *rpi_fw_crypto_key_status_str(uint32_t key_status)
     return buf;
 }
 
+const char *rpi_fw_crypto_key_usage_str(RPI_FW_CRYPTO_KEY_USAGE key_usage)
+{
+    switch (key_usage) {
+    case RPI_FW_CRYPTO_KEY_USAGE_UNDEFINED:
+        return "UNDEFINED";
+    case RPI_FW_CRYPTO_KEY_USAGE_RPI_CONNECT:
+        return "RPI_CONNECT";
+    case RPI_FW_CRYPTO_KEY_USAGE_RPI_RESERVED_0:
+    case RPI_FW_CRYPTO_KEY_USAGE_RPI_RESERVED_1:
+    case RPI_FW_CRYPTO_KEY_USAGE_RPI_RESERVED_2:
+    case RPI_FW_CRYPTO_KEY_USAGE_RPI_RESERVED_3:
+    case RPI_FW_CRYPTO_KEY_USAGE_RPI_RESERVED_4:
+    case RPI_FW_CRYPTO_KEY_USAGE_RPI_RESERVED_5:
+        return "RPI_RESERVED";
+    case RPI_FW_CRYPTO_KEY_USAGE_USER_DEFINED_0:
+    case RPI_FW_CRYPTO_KEY_USAGE_USER_DEFINED_1:
+    case RPI_FW_CRYPTO_KEY_USAGE_USER_DEFINED_2:
+    case RPI_FW_CRYPTO_KEY_USAGE_USER_DEFINED_3:
+    case RPI_FW_CRYPTO_KEY_USAGE_USER_DEFINED_4:
+    case RPI_FW_CRYPTO_KEY_USAGE_USER_DEFINED_5:
+    case RPI_FW_CRYPTO_KEY_USAGE_USER_DEFINED_6:
+        return "USER_DEFINED";
+    case RPI_FW_CRYPTO_KEY_USAGE_INVALID:
+        return "INVALID";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 // Implementation of ECDSA sign via firmware mailbox
 int rpi_fw_crypto_ecdsa_sign(uint32_t flags, uint32_t key_id, const uint8_t *hash, size_t hash_len,
                              uint8_t *sig, size_t sig_max_len, size_t *sig_len)
@@ -398,6 +429,60 @@ int rpi_fw_crypto_set_key_status(uint32_t key_id, uint32_t status)
     msg.hdr.tag_buf_size = 8;
     msg.value[0] = key_id;
     msg.value[1] = status;
+    msg.end_tag = 0;
+
+    rc = mbox_property(mb, &msg);
+    mbox_close(mb);
+
+    return (rc < 0) ? rc : RPI_FW_CRYPTO_SUCCESS;
+}
+
+int rpi_fw_crypto_get_key_usage(uint32_t key_id, RPI_FW_CRYPTO_KEY_USAGE *usage)
+{
+    int mb;
+    int rc;
+    struct firmware_msg msg = {0};
+
+    if (!usage)
+        return -RPI_FW_CRYPTO_EINVAL;
+
+    mb = mbox_open();
+    if (mb < 0)
+        return -RPI_FW_CRYPTO_ERROR_UNKNOWN;
+
+    msg.hdr.buf_size = sizeof(msg);
+    msg.hdr.tag = TAG_GET_CRYPTO_KEY_USAGE;
+    msg.hdr.tag_buf_size = 4;
+    msg.value[0] = key_id;
+
+    rc = mbox_property(mb, &msg);
+    mbox_close(mb);
+
+    if (rc < 0)
+        return rc;
+
+    if (msg.value[0] & VC_MAILBOX_ERROR)
+        return -RPI_FW_CRYPTO_KEY_NOT_FOUND;
+
+    *usage = (RPI_FW_CRYPTO_KEY_USAGE)msg.value[0];
+    return RPI_FW_CRYPTO_SUCCESS;
+}
+
+int rpi_fw_crypto_set_key_usage(uint32_t key_id, RPI_FW_CRYPTO_KEY_USAGE usage)
+{
+    int mb;
+    int rc;
+    struct firmware_msg msg = {0};
+
+    mb = mbox_open();
+    if (mb < 0)
+        return -RPI_FW_CRYPTO_ERROR_UNKNOWN;
+
+    msg.hdr.buf_size = sizeof(msg);
+    msg.hdr.tag = TAG_SET_CRYPTO_KEY_USAGE;
+    msg.hdr.tag_buf_size = 8;
+    msg.value[0] = key_id;
+    msg.value[1] = (uint32_t)usage;
     msg.end_tag = 0;
 
     rc = mbox_property(mb, &msg);

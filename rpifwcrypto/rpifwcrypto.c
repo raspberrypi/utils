@@ -8,9 +8,10 @@
 #include "rpifwcrypto.h"
 #include <errno.h>
 
-#define DEVICE_FILE_NAME "/dev/vcio"
-#define MAJOR_NUM 100
-#define IOCTL_MBOX_PROPERTY _IOWR(MAJOR_NUM, 0, char *)
+#define countof(x) ((int)(sizeof x/sizeof *x))
+
+#define VCIO_IOC_MAGIC 100
+#define IOCTL_MBOX_PROPERTY _IOWR(VCIO_IOC_MAGIC, 0, char *)
 
 #if 0
 #define LOG_DEBUG(...) do { \
@@ -140,10 +141,19 @@ struct firmware_gen_ecdsa_key_msg {
 
 static int mbox_open(void)
 {
-    int file_desc = open(DEVICE_FILE_NAME, 0);
-    if (file_desc < 0)
-        fprintf(stderr, "Failed to open %s: %s\n", DEVICE_FILE_NAME, strerror(errno));
-    return file_desc;
+    int file_desc;
+    const char *devices[] = {"/dev/vcio_crypto", "/dev/vcio"};
+    int i;
+    // open a char device file used for communicating with kernel mbox driver
+    // first try the more restrictive interface but fall back to full if unavailable
+    for (i = 0; i < countof(devices); i++)
+    {
+        file_desc = open(devices[i], 0);
+        if (file_desc >= 0)
+            return file_desc;
+    }
+    fprintf(stderr, "Failed to open %s: %s\n", devices[0], strerror(errno));
+    return -1;
 }
 
 static void mbox_close(int file_desc)

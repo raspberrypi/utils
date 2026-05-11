@@ -26,6 +26,10 @@ static void usage(const char *progname)
         "\n"
         "  set-key-status <key-id> [LOCKED] Sets the status attributes for the specified key.\n"
         "\n"
+        "  get-key-usage <key-id>           Gets the usage of a specified key\n"
+        "\n"
+        "  set-key-usage <key-id> <usage>   Sets the usage of a specified key\n"
+        "\n"
         "  sign --in <infile> --key-id <id> --alg <alg> [--out <outfile>] [--outform hex]\n"
         "\n"
         "    Supported algorithms: ec\n"
@@ -471,6 +475,38 @@ int main(int argc, char *argv[])
             goto error;
         }
         printf("Set key %u status to 0x%08x (%s)\n", key_id, status, rpi_fw_crypto_key_status_str(status));
+        return 0;
+    }
+
+    if (strcmp(argv[1], "get-key-usage") == 0) {
+        if (argc != 3)
+            usage(argv[0]);
+        key_id = atoi(argv[2]);
+        RPI_FW_CRYPTO_KEY_USAGE key_usage;
+        rc = rpi_fw_crypto_get_key_usage(key_id, &key_usage);
+        if (rc < 0)
+            goto error;
+        printf("Key %u usage: 0x%02x (%s)\n", key_id, (unsigned)key_usage, rpi_fw_crypto_key_usage_str(key_usage));
+        return 0;
+    }
+
+    if (strcmp(argv[1], "set-key-usage") == 0) {
+        if (argc != 4)
+            usage(argv[0]);
+        key_id = atoi(argv[2]);
+        unsigned long key_usage_raw = strtoul(argv[3], NULL, 0);
+        if (key_usage_raw > RPI_FW_CRYPTO_KEY_USAGE_INVALID) {
+            fprintf(stderr, "Invalid key usage 0x%lx: must be in range 0x0..0x%x\n",
+                    key_usage_raw, RPI_FW_CRYPTO_KEY_USAGE_INVALID);
+            return -1;
+        }
+        RPI_FW_CRYPTO_KEY_USAGE key_usage = (RPI_FW_CRYPTO_KEY_USAGE)key_usage_raw;
+        rc = rpi_fw_crypto_set_key_usage(key_id, key_usage);
+        if (rc < 0) {
+            fprintf(stderr, "Failed to set key usage: %s\n", rpi_fw_crypto_strerror(rc));
+            goto error;
+        }
+        printf("Set key %u usage to 0x%02x (%s)\n", key_id, (unsigned)key_usage, rpi_fw_crypto_key_usage_str(key_usage));
         return 0;
     }
 

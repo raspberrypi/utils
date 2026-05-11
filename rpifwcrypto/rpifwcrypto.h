@@ -28,6 +28,25 @@ typedef enum {
     RPI_FW_CRYPTO_KEY_NOT_BLANK = 10,      // Key slot is not blank
 } RPI_FW_CRYPTO_STATUS;
 
+typedef enum {
+    RPI_FW_CRYPTO_KEY_USAGE_UNDEFINED      = 0x0,
+    RPI_FW_CRYPTO_KEY_USAGE_RPI_CONNECT    = 0x1,
+    RPI_FW_CRYPTO_KEY_USAGE_RPI_RESERVED_0 = 0x2,
+    RPI_FW_CRYPTO_KEY_USAGE_RPI_RESERVED_1 = 0x3,
+    RPI_FW_CRYPTO_KEY_USAGE_RPI_RESERVED_2 = 0x4,
+    RPI_FW_CRYPTO_KEY_USAGE_RPI_RESERVED_3 = 0x5,
+    RPI_FW_CRYPTO_KEY_USAGE_RPI_RESERVED_4 = 0x6,
+    RPI_FW_CRYPTO_KEY_USAGE_RPI_RESERVED_5 = 0x7,
+    RPI_FW_CRYPTO_KEY_USAGE_USER_DEFINED_0 = 0x8,
+    RPI_FW_CRYPTO_KEY_USAGE_USER_DEFINED_1 = 0x9,
+    RPI_FW_CRYPTO_KEY_USAGE_USER_DEFINED_2 = 0xA,
+    RPI_FW_CRYPTO_KEY_USAGE_USER_DEFINED_3 = 0xB,
+    RPI_FW_CRYPTO_KEY_USAGE_USER_DEFINED_4 = 0xC,
+    RPI_FW_CRYPTO_KEY_USAGE_USER_DEFINED_5 = 0xD,
+    RPI_FW_CRYPTO_KEY_USAGE_USER_DEFINED_6 = 0xE,
+    RPI_FW_CRYPTO_KEY_USAGE_INVALID        = 0xF,
+} RPI_FW_CRYPTO_KEY_USAGE;
+
 /**
  * Get the number of OTP keys available in firmware
  *
@@ -127,6 +146,32 @@ int rpi_fw_crypto_get_private_key(uint32_t flags, uint32_t key_id, uint8_t *priv
  * @return A constant string describing the key status
  */
 const char *rpi_fw_crypto_key_status_str(uint32_t key_status);
+
+/**
+ * Get the usage of a specific OTP key
+ *
+ * @param key_id The ID of the key to query
+ * @param usage Pointer to store the key usage (RPI_FW_CRYPTO_KEY_USAGE value)
+ * @return 0 on success, negative error code on failure
+ */
+int rpi_fw_crypto_get_key_usage(uint32_t key_id, RPI_FW_CRYPTO_KEY_USAGE *usage);
+
+/**
+ * Set the usage of a specific OTP key
+ *
+ * @param key_id The ID of the key to set
+ * @param usage The new key usage value (RPI_FW_CRYPTO_KEY_USAGE value)
+ * @return 0 on success, negative error code on failure
+ */
+int rpi_fw_crypto_set_key_usage(uint32_t key_id, RPI_FW_CRYPTO_KEY_USAGE usage);
+
+/**
+ * Convert a key usage value to a human-readable string
+ *
+ * @param key_usage The key usage value (RPI_FW_CRYPTO_KEY_USAGE value)
+ * @return A constant string describing the key usage
+ */
+const char *rpi_fw_crypto_key_usage_str(RPI_FW_CRYPTO_KEY_USAGE key_usage);
 
 /**
  * Generates an ECDSA in the specified key slot.

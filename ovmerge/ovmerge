@@ -744,7 +744,7 @@ sub dtparam
 
 				if (defined $value)
 				{
-					my $bool = boolean_value($val);
+					my $bool = boolean_value($val, 1);
 					$bool = !$bool if ($sense eq '!');
 					if ($bool)
 					{
@@ -826,7 +826,7 @@ sub dtparam
 				if (defined $value)
 				{
 					# Enable or disable the fragment as needed
-					my $bool = boolean_value($value);
+					my $bool = boolean_value($value, 0);
 					if ($op eq '!')
 					{
 						$bool = !$bool;
@@ -1933,7 +1933,7 @@ sub apply_prop
 
 	if ($name eq 'status')
 	{
-		@vals = (['"', boolean_value($vals[0][1]) ? 'okay' : 'disabled']);
+		@vals = (['"', boolean_value($vals[0][1], 1) ? 'okay' : 'disabled']);
 	}
 	elsif ($name eq 'bootargs')
 	{
@@ -2064,7 +2064,7 @@ sub integer_value
 
 sub boolean_value
 {
-	my ($value) = @_;
+	my ($value, $strict) = @_;
 	if ($value =~ /^(y|yes|on|true|okay)?$/)
 	{
 		return 1;
@@ -2075,7 +2075,8 @@ sub boolean_value
 	}
 	elsif ($value !~ /^[0-9]/)
 	{
-		die "* Bad boolean value '$value'\n";
+		die "* Bad boolean value '$value'\n" if ($strict);
+		$value = $value ne "";
 	}
 	return $value != 0;
 }

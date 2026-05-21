@@ -1822,6 +1822,8 @@ int dtoverlay_override_one_target(int override_type,
                 override_int = 0;
             else if (strcmp(override_value, "up") == 0)
                 override_int = 2;
+            else if (override_type == DTOVERRIDE_OVERLAY)
+                override_int = (strlen(override_value) != 0); /* allow non-empty strings to enable/disable fragments */
             else
             {
                 dtoverlay_error("invalid override value '%s' - ignored",

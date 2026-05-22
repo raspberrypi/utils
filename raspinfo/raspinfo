@@ -181,6 +181,20 @@ network_info() {
    fi
 }
 
+wifi_info() {
+   cat /proc/net/wireless 2>/dev/null || echo "/proc/net/wireless not available"
+   echo
+   if command -v rfkill >/dev/null; then
+      rfkill list
+   else
+      echo "rfkill not installed"
+   fi
+   echo
+   if command -v ethtool >/dev/null; then
+      ethtool -i wlan0
+   fi
+}
+
 OUT=raspinfo.txt
 
 rm -f $OUT
@@ -254,8 +268,10 @@ echo "----------------------"
 echo
 
 network_info
-
 echo
+wifi_info
+echo
+
 echo "USB Information"
 echo "---------------"
 echo

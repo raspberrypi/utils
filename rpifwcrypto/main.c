@@ -516,6 +516,9 @@ error:
     // Check the firmware crypto error status. If set, display the human readable string.
     last_err = rpi_fw_crypto_get_last_error();
     if (last_err != RPI_FW_CRYPTO_SUCCESS)
+    {
         fprintf(stderr, "Last crypto error: %d (%s)\n", last_err, rpi_fw_crypto_strerror(last_err));
+        rc = -last_err;
+    }
     return rc;
 }

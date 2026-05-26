@@ -42,7 +42,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VCIO_IOC_MAGIC 100
 #define IOCTL_MBOX_PROPERTY _IOWR(VCIO_IOC_MAGIC, 0, char *)
 
-#define MAX_STRING 1024
+#define MAX_STRING (4*1024)
 
 /*
  * use ioctl to send mbox property message

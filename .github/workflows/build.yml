@@ -53,7 +53,8 @@ jobs:
         run: |
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_INSTALL_PREFIX=/usr
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DENABLE_WERROR=ON
 
       - name: Configure (armhf)
         if: matrix.arch == 'armhf'
@@ -61,6 +62,7 @@ jobs:
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
             -DCMAKE_INSTALL_PREFIX=/usr \
+            -DENABLE_WERROR=ON \
             -DCMAKE_SYSTEM_NAME=Linux \
             -DCMAKE_SYSTEM_PROCESSOR=arm \
             -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \

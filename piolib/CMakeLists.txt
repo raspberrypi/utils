@@ -9,7 +9,11 @@ project(piolib)
 
 add_compile_definitions(LIBRARY_BUILD=1)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
+option(ENABLE_WERROR "Treat compiler warnings as errors" OFF)
+if(ENABLE_WERROR)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+endif()
 
 if (CMAKE_COMPILER_IS_GNUCC)
    add_definitions (-ffunction-sections)

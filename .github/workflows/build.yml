@@ -1,0 +1,82 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.arch }} ${{ matrix.build_type }}
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, armhf]
+        build_type: [Debug, Release]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies (arm64)
+        if: matrix.arch == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            device-tree-compiler \
+            libncurses-dev \
+            libfdt-dev \
+            libgnutls28-dev \
+            pkg-config
+
+      - name: Install build dependencies (armhf)
+        if: matrix.arch == 'armhf'
+        run: |
+          sudo dpkg --add-architecture armhf
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake \
+            device-tree-compiler \
+            crossbuild-essential-armhf \
+            pkg-config \
+            libncurses-dev:armhf \
+            libfdt-dev:armhf \
+            libgnutls28-dev:armhf
+
+      - name: Configure (arm64)
+        if: matrix.arch == 'arm64'
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_INSTALL_PREFIX=/usr
+
+      - name: Configure (armhf)
+        if: matrix.arch == 'armhf'
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=arm \
+            -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
+            -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++ \
+            -DCMAKE_LIBRARY_ARCHITECTURE=arm-linux-gnueabihf \
+            -DPKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Install (stage)
+        run: DESTDIR="$PWD/install" cmake --install build
+
+      - name: Upload artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: utils-${{ matrix.arch }}-${{ matrix.build_type }}
+          path: install/
+          if-no-files-found: error

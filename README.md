@@ -42,3 +42,5 @@ Install the prerequisites with "sudo apt install cmake device-tree-compiler libn
     N.B. Use *cmake -DBUILD_SHARED_LIBS=1 .* to build the libraries in the subprojects (libdtovl, gpiolib and piolib) as shared (as opposed to static) libraries. Add -DCMAKE_INSTALL_PREFIX=/usr to override the default install path of /usr/local.
  - *make*
  - *sudo make install*
+
+ TEST Github workflow

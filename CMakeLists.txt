@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.1...3.27)
 
 project(utils)
 
+option(ENABLE_WERROR "Treat compiler warnings as errors" OFF)
+
 # List of subsidiary CMakeLists
 add_subdirectory(dtmerge)
 add_subdirectory(eeptools)

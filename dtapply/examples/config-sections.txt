@@ -1,0 +1,46 @@
+# Conditional-sections config.txt example
+#
+# Demonstrates how [section] headers gate directives to specific Pi models.
+# dtapply infers the model from the DTB filename (e.g. bcm2711-rpi-4-b.dtb
+# → pi4) and only applies directives from matching sections.
+# Use --model <id> to override the inferred model.
+
+# Lines before the first section header are always applied (equivalent to [all]).
+dtparam=audio=on
+
+# -----------------------------------------------------------------------
+# [all] applies to every model, just like lines before the first header.
+# -----------------------------------------------------------------------
+[all]
+dtparam=i2c_arm=on
+
+# -----------------------------------------------------------------------
+# Pi 4 and Pi 400 each have their own section.  The Pi 400 is electrically
+# identical to the Pi 4 for DT purposes, but has its own DTB, so it gets
+# its own section here.
+# -----------------------------------------------------------------------
+[pi4]
+dtoverlay=vc4-kms-v3d,cma-512
+
+[pi400]
+dtoverlay=vc4-kms-v3d,cma-512
+
+# -----------------------------------------------------------------------
+# Pi 5 uses a different KMS overlay.
+# -----------------------------------------------------------------------
+[pi5]
+dtoverlay=vc4-kms-v3d-pi5
+
+# -----------------------------------------------------------------------
+# Compute Module 4: no wireless, may need explicit antenna or SDIO config.
+# -----------------------------------------------------------------------
+[cm4]
+dtoverlay=vc4-kms-v3d,cma-256
+dtparam=ant2                    # select external antenna
+
+# -----------------------------------------------------------------------
+# Back to [all] for directives that should apply to every model regardless
+# of what came before.
+# -----------------------------------------------------------------------
+[all]
+dtparam=spi=on

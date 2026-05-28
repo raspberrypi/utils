@@ -1,6 +1,8 @@
 # utils
 A collection of scripts and simple applications
 
+* [dtapply](dtapply/) - A script that reads a Raspberry Pi `config.txt` and uses `dtmerge`
+    to apply all its `dtparam` and `dtoverlay` directives to a base `.dtb` file.
 * [dtmerge](dtmerge/) - A tool for applying compiled DT overlays (`*.dtbo`) to base Device
     Tree files (`*.dtb`). Also includes the `dtoverlay` and `dtparam` utilities.
 * [eeptools](eeptools/) - Tools for creating and managing EEPROMs for HAT+ and HAT board.

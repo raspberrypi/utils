@@ -1,0 +1,54 @@
+# Overlay-context config.txt example
+#
+# Demonstrates two related features of config.txt parameter processing:
+#
+#   1. Splitting overlay parameters across multiple dtparam lines.
+#   2. Using global (base-DT) parameters in the middle of an overlay block.
+#
+# The firmware (and dtapply) track a "current overlay".  Every parameter
+# encountered while an overlay is active is resolved against that overlay's
+# __overrides__ node first; only if it is not found there is it applied to
+# the base device tree instead.  This means a single dtoverlay block can
+# set both overlay-specific and global parameters without needing a
+# separate dtparam= line outside the block.
+#
+# A bare "dtoverlay=" (nothing after the =) ends the current overlay
+# context, returning to base-only mode.  "dtoverlay=none" has the same
+# effect.
+
+# ----- Example 1: parameters split across lines -------------------------
+#
+# Instead of crowding everything onto one line:
+#   dtoverlay=i2c-gpio,i2c_gpio_sda=2,i2c_gpio_scl=3,i2c_gpio_delay_us=2,bus=3
+#
+# ... the parameters can be spread across dtparam lines for readability.
+# All four lines below are passed together in a single dtmerge call.
+
+dtoverlay=i2c-gpio
+dtparam=i2c_gpio_sda=2
+dtparam=i2c_gpio_scl=3
+dtparam=i2c_gpio_delay_us=2
+dtparam=bus=3
+
+# ----- Example 2: global parameter inline with an overlay ---------------
+#
+# 'i2c_arm_baudrate' is a parameter of the base device tree, not of the
+# uart0 overlay.  Placing it here is valid: dtmerge will see that it is
+# not in uart0's __overrides__ and will apply it to the base DT instead.
+# The net result is identical to a separate dtparam=i2c_arm_baudrate=400000
+# line, but keeps logically related config together.
+
+dtoverlay=uart0,txd0_pin=14,rxd0_pin=15
+dtparam=i2c_arm_baudrate=400000   # global param, resolved against base DT
+
+# ----- Example 3: resetting the overlay context -------------------------
+#
+# After "dtoverlay=", subsequent dtparam lines apply to the base DT only.
+# This is useful when you need to set a base parameter that shares a name
+# with a parameter in the preceding overlay and you want to be certain it
+# goes to the base.
+
+dtoverlay=gpio-fan,gpiopin=14
+dtoverlay=                          # end gpio-fan context
+
+dtparam=audio=on                    # unambiguously a base-DT parameter

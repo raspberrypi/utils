@@ -1,0 +1,20 @@
+# Basic config.txt example
+#
+# Demonstrates the most common dtparam and dtoverlay usage.
+# All lines here fall under the implicit [all] section, so they apply
+# to every Pi model.
+
+# Enable the audio output pin
+dtparam=audio=on
+
+# Enable I2C on the ARM core (accessible as /dev/i2c-1)
+dtparam=i2c_arm=on
+
+# Enable SPI
+dtparam=spi=on
+
+# Load the VC4 KMS graphics overlay
+dtoverlay=vc4-kms-v3d
+
+# Load a 1-Wire bus on GPIO 4
+dtoverlay=w1-gpio,gpiopin=4

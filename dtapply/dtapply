@@ -215,10 +215,11 @@ def run_dtmerge(dtmerge_bin: str, base: str, output: str,
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        sys.stderr.write(result.stderr)
-        raise RuntimeError(
-            f"dtmerge failed (exit {result.returncode}): {' '.join(cmd)}"
-        )
+        if result.stdout:
+            sys.stdout.write(result.stdout)
+        if result.stderr:
+            sys.stderr.write(result.stderr)
+        raise RuntimeError(f"dtmerge failed (exit {result.returncode})")
     if debug and result.stderr:
         sys.stderr.write(result.stderr)
 
@@ -270,17 +271,26 @@ def dtapply(base_dtb: str, config_path: str, output_dtb: str,
                 _, params = action
                 if debug:
                     print(f"  dtmerge: base params {params}")
-                run_dtmerge(dtmerge_bin, current, next_dtb, '-', params, debug)
+                try:
+                    run_dtmerge(dtmerge_bin, current, next_dtb, '-', params, debug)
+                except RuntimeError:
+                    print(f"  Warning: dtparam={','.join(params)} failed; skipping")
+                    continue
 
             else:  # overlay
                 _, overlay_name, params = action
                 try:
                     overlay_path = find_overlay(overlay_name, overlays_dir)
                 except FileNotFoundError as exc:
-                    sys.exit(f"Error: {exc}")
+                    print(f"  Warning: {exc}; skipping")
+                    continue
                 if debug:
                     print(f"  dtmerge: dtoverlay={overlay_name} params={params}")
-                run_dtmerge(dtmerge_bin, current, next_dtb, overlay_path, params, debug)
+                try:
+                    run_dtmerge(dtmerge_bin, current, next_dtb, overlay_path, params, debug)
+                except RuntimeError:
+                    print(f"  Warning: dtoverlay={overlay_name} failed; skipping")
+                    continue
 
             current = next_dtb
 

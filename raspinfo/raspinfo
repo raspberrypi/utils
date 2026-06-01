@@ -6,6 +6,7 @@
 # IP4 d.d.d.d decimal	    "s/\([0-9]\{1,3\}\.\)\{3,3\}[0-9]\{1,3\}/x.x.x.x/g"
 # mac address	            "s/\([0-9a-fA-F]\{2,2\}\:\)\{5,5\}[0-9a-fA-F]\{2,2\}/m.m.m.m/g"
 
+alias filter="sed -e 's/\([0-9a-fA-F]\{1,4\}:\)\{7,7\}[0-9a-fA-F]\{1,4\}/y.y.y.y.y.y.y.y/g' | sed -e 's/[0-9a-fA-F]\{1,4\}:\(:[0-9a-fA-F]\{1,4\}\)\{1,4\}/y::y.y.y.y/g' | sed -e 's/\([0-9]\{1,3\}\.\)\{3,3\}[0-9]\{1,3\}/x.x.x.x/g' | sed -e 's/\([0-9a-fA-F]\{2,2\}\:\)\{5,5\}[0-9a-fA-F]\{2,2\}/m.m.m.m/g'"
 
 display_info_drm() {
    # kmsprint is more useful, but not always installed
@@ -168,20 +169,6 @@ audio_info() {
 }
 
 network_info() {
-   ifconfig | sed -e "s/\([0-9a-fA-F]\{1,4\}:\)\{7,7\}[0-9a-fA-F]\{1,4\}/y.y.y.y.y.y.y.y/g" | sed -e "s/[0-9a-fA-F]\{1,4\}:\(:[0-9a-fA-F]\{1,4\}\)\{1,4\}/y::y.y.y.y/g" | sed -e "s/\([0-9]\{1,3\}\.\)\{3,3\}[0-9]\{1,3\}/x.x.x.x/g" | sed -e "s/\([0-9a-fA-F]\{2,2\}\:\)\{5,5\}[0-9a-fA-F]\{2,2\}/m.m.m.m/g"
-   echo
-   if command -v ethtool > /dev/null; then
-      ethtool eth0
-      echo
-      ethtool --show-eee eth0
-      echo
-      ethtool -S eth0
-   else
-      echo "ethtool not installed"
-   fi
-}
-
-wifi_info() {
    cat /proc/net/wireless 2>/dev/null || echo "/proc/net/wireless not available"
    echo
    if command -v rfkill >/dev/null; then
@@ -190,8 +177,28 @@ wifi_info() {
       echo "rfkill not installed"
    fi
    echo
+
    if command -v ethtool >/dev/null; then
-      ethtool -i wlan0
+      # Using sysfs to identify physical interfaces
+      for iface in /sys/class/net/*; do
+         iface_name=$(basename "$iface")
+         # Check if device directory exists (indicates physical interface)
+         if [ -d "$iface/device" ]; then
+            ifconfig $iface_name | filter
+            if [ -d "$iface/phy80211" ]; then
+               ethtool -i $iface_name
+            else
+               sudo ethtool $iface_name
+               echo
+               ethtool --show-eee $iface_name
+               echo
+               ethtool -S $iface_name
+            fi
+            echo
+         fi
+      done
+   else
+      echo "ethtool not installed"
    fi
 }
 
@@ -246,6 +253,7 @@ vcgencmd mem_reloc_stats
 echo
 echo "Filesystem information"
 echo "----------------------"
+echo
 
 df
 echo
@@ -254,6 +262,7 @@ cat /proc/swaps
 echo
 echo "Package version information"
 echo "---------------------------"
+echo
 
 apt-cache policy raspberrypi-ui-mods | head -2
 apt-cache policy raspberrypi-sys-mods | head -2
@@ -268,8 +277,6 @@ echo "----------------------"
 echo
 
 network_info
-echo
-wifi_info
 echo
 
 echo "USB Information"
@@ -305,6 +312,7 @@ vcgencmd get_config str
 echo
 echo "cmdline.txt"
 echo "-----------"
+echo
 
 cat /proc/cmdline
 
@@ -339,8 +347,7 @@ echo "dmesg log"
 echo "---------"
 echo
 
-sudo dmesg | sed -e "s/\([0-9a-fA-F]\{1,4\}:\)\{7,7\}[0-9a-fA-F]\{1,4\}/y.y.y.y.y.y.y.y/g" | sed -e "s/[0-9a-fA-F]\{1,4\}:\(:[0-9a-fA-F]\{1,4\}\)\{1,4\}/y::y.y.y.y/g" | sed -e "s/\([0-9a-fA-F]\{2,2\}\:\)\{5,5\}[0-9a-fA-F]\{2,2\}/m.m.m.m/g"
-
+sudo dmesg | filter
 
 if  grep -q "^Revision\s*:\s*[ 123][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]1[13457][0-9a-fA-F]$" /proc/cpuinfo
 then

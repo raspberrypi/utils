@@ -8,7 +8,7 @@ if(ENABLE_WERROR)
 endif()
 
 # Set project name and version
-project(rpieepromab VERSION 0.2.2)
+project(rpieepromab VERSION 0.2.3)
 
 # Get git hash for version string
 find_package(Git QUIET)

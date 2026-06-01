@@ -7,6 +7,8 @@
 
 #define PARTITION_NUM_TO_STRING(P) (P == RPI_EEPROM_AB_PARTITION_A ? "A" : (P == RPI_EEPROM_AB_PARTITION_B ? "B" : "Unknown"))
 
+#define DT_MIN_BOOT_VER_PATH "/proc/device-tree/chosen/rpi-min-boot-ver"
+
 /* Print the usage message */
 static void usage(const char *progname, int exit_status) {
     fprintf(stderr,
@@ -69,6 +71,86 @@ static int hex2bin(const char *hexstr, uint8_t *bin, size_t bin_len) {
     return 0;
 }
 
+/* Read the device's minimum required bootloader version from the device tree */
+static int read_device_min_boot_ver(uint32_t *min_boot_ver) {
+    FILE *f;
+    uint8_t buf[sizeof(uint32_t)];
+    size_t n;
+
+    *min_boot_ver = 0;
+
+    f = fopen(DT_MIN_BOOT_VER_PATH, "rb");
+    if (!f) {
+        return -1;
+    }
+
+    n = fread(buf, 1, sizeof(buf), f);
+    fclose(f);
+
+    if (n != sizeof(uint32_t)) {
+        return -1;
+    }
+
+    *min_boot_ver = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
+    return 0;
+}
+
+/* Scan the update image for the MFG_VER value */
+static int read_image_boot_ver(const uint8_t *data, size_t data_len, uint32_t *image_boot_ver) {
+    static const char marker[] = "MFG_VER: ";
+    const size_t marker_len = sizeof(marker) - 1;
+    const uint8_t *match;
+
+    *image_boot_ver = 0;
+
+    match = memmem(data, data_len, marker, marker_len);
+    if (!match) {
+        return -1;
+    }
+
+    uint32_t value = 0;
+    size_t digits = 0;
+    for (const uint8_t *p = match + marker_len; p < data + data_len; p++) {
+        char c = (char) *p;
+        if (c < '0' || c > '9') {
+            break;
+        }
+        value = (value * 10) + (uint32_t) (c - '0');
+        digits++;
+    }
+    if (digits == 0) {
+        return -1;
+    }
+    *image_boot_ver = value;
+    return 0;
+}
+
+/* Verify that the update image meets the board's minimum
+ * required bootloader version */
+static int check_min_boot_ver(const uint8_t *update_data, size_t update_len) {
+    uint32_t device_min_boot_ver = 0;
+    uint32_t image_boot_ver = 0;
+
+    if (read_device_min_boot_ver(&device_min_boot_ver) != 0) {
+        // Failed to read device minimum bootloader version from device tree
+        // Default to 0
+        device_min_boot_ver = 0;
+    }
+
+    if (read_image_boot_ver(update_data, update_len, &image_boot_ver) != 0) {
+        // Failed to find MFG_VER in update image
+        // Default to 0
+        image_boot_ver = 0;
+    }
+
+    if (device_min_boot_ver > image_boot_ver) {
+        printf("EEPROM image version %u does not meet the minimum bootloader version %u required by this board.\n",
+            image_boot_ver, device_min_boot_ver);
+        return -1;
+    }
+    return 0;
+}
+
 static int cmd_write_eeprom_update(int argc, char *argv[]) {
     RPI_EEPROM_AB_ERROR err;
     const char *update_filename = NULL;
@@ -118,6 +200,10 @@ static int cmd_write_eeprom_update(int argc, char *argv[]) {
 
     if (memcmp(update_data + 8, "bootsys", 7) != 0) {
         printf("Invalid AB update file.\n");
+        return -1;
+    }
+
+    if (check_min_boot_ver(update_data, (size_t) file_size) != 0) {
         return -1;
     }
 

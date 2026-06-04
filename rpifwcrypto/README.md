@@ -39,13 +39,47 @@ Install prerequisites with "sudo apt install cmake libgnutls28-dev"" - you need 
 * rpi-fw-crypto privkey --key-id 1 --out device-priv.der                        (Retrieves the device private key - in DER form - will error if key status is locked)
 * rpi-fw-crypto genkey --key-id 1 --alg ec                                      (Generates an ECDSA P256 key-pair and writes the private key to the OTP)
 
+**Locking the device private key**
+
+Access to the device private key can be locked by default at boot by setting
+`lock_device_private_key=1` in config.txt. This blocks the raw OTP read API
+(`rpi-fw-crypto privkey`) for the key until the device is rebooted, whilst
+still allowing the sign, hmac and pubkey operations.
+
+The contents of config.txt (within boot.img) is authenticated by the firmware
+if secure-boot is enabled and `lock_device_private_key=1` should always be
+specified if secure-boot is enabled.
+
+**OpenSSL equivalents**
+
+The firmware uses MbedTLS to implement the cryptographic operations. For
+reference / test, here are the OpenSSL equivalents. In these examples
+`private_key.pem` is a local copy of the device private key. If the key
+status is not LOCKED it can be extracted and converted to PEM with:
+
+```
+rpi-fw-crypto privkey --key-id 1 --out device-priv.der
+openssl ec -inform DER -in device-priv.der -outform PEM -out private_key.pem
+```
+
+```
+# sign - SHA256 hash of the input, ECDSA P-256 signature in DER form
+openssl pkeyutl -sign -inkey private_key.pem -rawin -in message.bin -out sig.bin
+openssl pkeyutl -verify -pubin -inkey device-pub.der -sigfile sig.bin -rawin -in message.bin
+
+# hmac - HMAC-SHA256 keyed with the raw 32-byte OTP key value
+openssl dgst -sha256 -mac HMAC -macopt hexkey:"$(rpi-otp-private-key)" message.bin
+
+# pubkey - DER (SubjectPublicKeyInfo) public key derived from the private key
+openssl ec -in private_key.pem -pubout -outform DER -out device-pub.der
+
+# genkey - ECDSA P-256 (prime256v1) key-pair generation
+openssl ecparam -name prime256v1 -genkey -noout -out private_key.pem
+```
+
 ** Notes **
 The device unique private key can also be provisioned with the `rpi-otp-private-key` utility.
 This MUST be a raw ECDSA P-256 key and not just a random number.
-
-Access to the device private key can be locked by default at boot by setting lock_device_private_key=1 in config.txt.
-The contents of config.txt (within boot.img) is authenticated by the firmware if secure-boot is enabled and
-lock_device_private_key=1 should always be specified if secure-boot is enabled.
 
 This service is not a hardware security module and the current implementation
 does not protect the key and/or OTP from being accessed directly with root level privileges.

@@ -77,6 +77,16 @@ openssl ec -in private_key.pem -pubout -outform DER -out device-pub.der
 openssl ecparam -name prime256v1 -genkey -noout -out private_key.pem
 ```
 
+**Error handling and debug**
+
+If the firmware reports an error then `rpi-fw-crypto` prints the error
+e.g. `Last crypto error: 4 (Key locked)` and sets the exit code to the
+negated firmware error code (`RPI_FW_CRYPTO_STATUS` in `rpifwcrypto.h`).
+Since shells report exit codes as an unsigned byte this appears as
+`256 - N` e.g. `KEY_LOCKED` (4) gives an exit code of 252.
+
+The firmware logs can be viewed with `sudo vclog -m` for additional debug.
+
 ** Notes **
 The device unique private key can also be provisioned with the `rpi-otp-private-key` utility.
 This MUST be a raw ECDSA P-256 key and not just a random number.

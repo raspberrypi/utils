@@ -28,6 +28,14 @@ make
 sudo make install
 ```
 
+If overwriting the system (APT) installed `rpi-fw-crypto` set the CMake
+install prefix to `/usr`. Otherwise, there will be a library mismatch because
+the default install prefix is `/usr/local`:
+
+```
+cmake -DCMAKE_INSTALL_PREFIX=/usr ..
+```
+
 ## Usage
 
 Display usage instructions for all operations:

@@ -564,6 +564,7 @@ int dtoverlay_merge_fragment(DTBLOB_T *base_dtb, int target_off,
                                     int overlay_off, int depth)
 {
     int prop_off, subnode_off;
+    int preserve_phandles;
     int err = 0;
 
     if (dtoverlay_debug_enabled)
@@ -577,6 +578,10 @@ int dtoverlay_merge_fragment(DTBLOB_T *base_dtb, int target_off,
         dtoverlay_debug("merge_fragment(%s,%s)", base_path,
                         overlay_path);
     }
+
+    // Check for a property flag to indicate preserving top-level phandles
+    preserve_phandles = depth > 0 ||
+        fdt_getprop(overlay_dtb->fdt, overlay_off, "dtoverlay,preserve-phandle", NULL);
 
     // Merge each property of the node
     for (prop_off = fdt_first_property_offset(overlay_dtb->fdt, overlay_off);
@@ -592,10 +597,11 @@ int dtoverlay_merge_fragment(DTBLOB_T *base_dtb, int target_off,
         prop_val = fdt_getprop_by_offset(overlay_dtb->fdt, prop_off,
                                          &prop_name, &prop_len);
 
-        /* Skip these system properties (only phandles in the first level) */
+        // Skip system properties and top-level phandles unless preserved
         if ((strcmp(prop_name, "name") == 0) ||
-            ((depth == 0) && ((strcmp(prop_name, "phandle") == 0) ||
-                              (strcmp(prop_name, "linux,phandle") == 0))))
+            (strcmp(prop_name, "dtoverlay,preserve-phandle") == 0) ||
+            (!preserve_phandles && ((strcmp(prop_name, "phandle") == 0) ||
+                                    (strcmp(prop_name, "linux,phandle") == 0))))
             continue;
 
         dtoverlay_debug("  +prop(%s)", prop_name);

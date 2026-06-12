@@ -304,6 +304,17 @@ foreach my $overlay (@ARGV)
 		foreach my $fragment (get_fragments($dt))
 		{
 			delete_node($fragment) if (get_child($fragment, '__dormant__'));
+
+			# Treat a dtoverlay,preserve-phandle property as an export of any label on the node
+			my $payload = get_child($fragment, '__overlay__');
+			if (get_prop($payload, "dtoverlay,preserve-phandle"))
+			{
+				foreach my $label (get_labels($payload))
+				{
+					adj_ref(1, $label);
+				}
+				delete_prop($payload, "dtoverlay,preserve-phandle");
+			}
 		}
 	}
 	$cur_dt = undef;

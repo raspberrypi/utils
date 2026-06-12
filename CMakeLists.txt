@@ -4,6 +4,14 @@ project(utils)
 
 option(ENABLE_WERROR "Treat compiler warnings as errors" OFF)
 
+# Customize binaries for specific distributions
+set(KNOWN_DISTRIBUTIONS debian gentoo generic)
+option(DISTRIBUTION "Enable distribution specific functions" debian) # debian is the base of raspberry pi os
+if(NOT DISTRIBUTION IN_LIST KNOWN_DISTRIBUTIONS)
+  message(STATUS "specified distribution not known - assuming generic distribution")
+  set(DISTRIBUTION generic)
+endif()
+
 # List of subsidiary CMakeLists
 add_subdirectory(dtapply)
 add_subdirectory(dtmerge)

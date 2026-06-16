@@ -6,7 +6,11 @@ extern "C" {
 #endif
 
 #define ARM_CRYPTO_KEY_STATUS_TYPE_DEVICE_PRIVATE_KEY (1 << 0)
-#define ARM_CRYPTO_KEY_STATUS_LOCKED                  (1 << 8)
+#define ARM_CRYPTO_KEY_STATUS_READ_LOCKED             (1 << 8)
+#define ARM_CRYPTO_KEY_STATUS_GEN_LOCKED              (1 << 9)
+#define ARM_CRYPTO_KEY_STATUS_SIGN_LOCKED             (1 << 10)
+#define ARM_CRYPTO_KEY_STATUS_HMAC_LOCKED             (1 << 11)
+#define ARM_CRYPTO_KEY_STATUS_USAGE_LOCKED            (1 << 12)
 
 #define RPI_FW_CRYPTO_HMAC_MSG_MAX_SIZE     2048
 #define RPI_FW_CRYPTO_ECDSA_RESP_MAX_SIZE   128

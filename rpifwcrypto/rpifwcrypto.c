@@ -290,18 +290,42 @@ const char *rpi_fw_crypto_strerror(RPI_FW_CRYPTO_STATUS status)
 // Converts a key_status value to a human-readable string, e.g. "CUSTOMER LOCKED"
 const char *rpi_fw_crypto_key_status_str(uint32_t key_status)
 {
-    static char buf[64];
+    static char buf[100];
     buf[0] = '\0';
     uint32_t known = 0;
     if (key_status & ARM_CRYPTO_KEY_STATUS_TYPE_DEVICE_PRIVATE_KEY) {
         strcat(buf, "DEVICE");
         known |= ARM_CRYPTO_KEY_STATUS_TYPE_DEVICE_PRIVATE_KEY;
     }
-    if (key_status & ARM_CRYPTO_KEY_STATUS_LOCKED) {
+    if (key_status & ARM_CRYPTO_KEY_STATUS_READ_LOCKED) {
         if (buf[0])
             strcat(buf, " ");
-        strcat(buf, "LOCKED");
-        known |= ARM_CRYPTO_KEY_STATUS_LOCKED;
+        strcat(buf, "READ_LOCKED");
+        known |= ARM_CRYPTO_KEY_STATUS_READ_LOCKED;
+    }
+    if (key_status & ARM_CRYPTO_KEY_STATUS_GEN_LOCKED) {
+        if (buf[0])
+            strcat(buf, " ");
+        strcat(buf, "GEN_LOCKED");
+        known |= ARM_CRYPTO_KEY_STATUS_GEN_LOCKED;
+    }
+    if (key_status & ARM_CRYPTO_KEY_STATUS_SIGN_LOCKED) {
+        if (buf[0])
+            strcat(buf, " ");
+        strcat(buf, "SIGN_LOCKED");
+        known |= ARM_CRYPTO_KEY_STATUS_SIGN_LOCKED;
+    }
+    if (key_status & ARM_CRYPTO_KEY_STATUS_HMAC_LOCKED) {
+        if (buf[0])
+            strcat(buf, " ");
+        strcat(buf, "HMAC_LOCKED");
+        known |= ARM_CRYPTO_KEY_STATUS_HMAC_LOCKED;
+    }
+    if (key_status & ARM_CRYPTO_KEY_STATUS_USAGE_LOCKED) {
+        if (buf[0])
+            strcat(buf, " ");
+        strcat(buf, "USAGE_LOCKED");
+        known |= ARM_CRYPTO_KEY_STATUS_USAGE_LOCKED;
     }
     if (key_status & ~known) {
         if (buf[0])

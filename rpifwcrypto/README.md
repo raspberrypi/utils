@@ -65,8 +65,18 @@ rpi-fw-crypto get-key-status 1
 Block the raw OTP read API on key-id 1 until the device is rebooted:
 
 ```
-rpi-fw-crypto set-key-status 1 LOCKED
+rpi-fw-crypto set-key-status 1 READ_LOCKED
 ```
+
+All locks persist until the device is rebooted:
+
+| Flag | Description |
+|------|-------------|
+| `READ_LOCKED` | Blocks the raw OTP read API (`privkey`) |
+| `GEN_LOCKED` | Blocks key generation (`genkey`) |
+| `SIGN_LOCKED` | Blocks signing (`sign`) |
+| `HMAC_LOCKED` | Blocks HMAC (`hmac`) |
+| `USAGE_LOCKED` | Blocks setting the key usage (`set-key-usage`) |
 
 Get the usage of key-id 1:
 
@@ -115,12 +125,18 @@ Generate an ECDSA P256 key-pair and write the private key to the OTP:
 rpi-fw-crypto genkey --key-id 1 --alg ec
 ```
 
-## Locking the device private key
+## Locking at boot via config.txt
 
-Access to the device private key can be locked by default at boot by setting
-`lock_device_private_key=1` in config.txt. This blocks the raw OTP read API
-(`rpi-fw-crypto privkey`) for the key until the device is rebooted, whilst
-still allowing the sign, hmac and pubkey operations.
+Locks can be applied to every key by default at boot via config.txt
+and persist until the device is rebooted.
+
+`lock_device_private_key=1` blocks the raw OTP read API (`rpi-fw-crypto
+privkey`) for all keys, whilst still allowing the sign, hmac and
+pubkey operations.
+
+`lock_device_key_write=1` blocks both generating a key (`rpi-fw-crypto genkey`)
+and setting its usage (`rpi-fw-crypto set-key-usage`). This is equivalent to
+applying `GEN_LOCKED` and `USAGE_LOCKED` to every key.
 
 The contents of config.txt (within boot.img) is authenticated by the firmware
 if secure-boot is enabled and `lock_device_private_key=1` should always be

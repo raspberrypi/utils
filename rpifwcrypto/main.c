@@ -22,9 +22,16 @@ static void usage(const char *progname)
         "  get-key-status <key-id>          Gets the status of a specified key\n"
         "     STATUS is a bitmask of the following flags:\n"
         "     - DEVICE - Key is the device unique private key\n"
-        "     - LOCKED - The key cannot be read raw format. LOCKED persists until reboot.\n"
+        "     - READ_LOCKED - The key cannot be read in raw format\n"
+        "     - GEN_LOCKED - Key generation is locked\n"
+        "     - SIGN_LOCKED - Signing operations are locked\n"
+        "     - HMAC_LOCKED - HMAC operations are locked\n"
+        "     - USAGE_LOCKED - Key usage updates are locked\n"
         "\n"
-        "  set-key-status <key-id> [LOCKED] Sets the status attributes for the specified key.\n"
+        "  set-key-status <key-id> <status> Sets the status attributes for the specified key\n"
+        "     that persists until reboot.\n"
+        "     Supported status strings: READ_LOCKED, GEN_LOCKED,\n"
+        "     SIGN_LOCKED, HMAC_LOCKED, USAGE_LOCKED\n"
         "\n"
         "  get-key-usage <key-id>           Gets the usage of a specified key\n"
         "\n"
@@ -297,8 +304,16 @@ static int parse_key_status_args(int argc, char *argv[], int start_idx, int *out
     int status = 0;
     int i;
     for (i = start_idx; i < argc; ++i) {
-        if (strcmp(argv[i], "LOCKED") == 0) {
-            status |= ARM_CRYPTO_KEY_STATUS_LOCKED;
+        if (strcmp(argv[i], "LOCKED") == 0 || strcmp(argv[i], "READ_LOCKED") == 0) {
+            status |= ARM_CRYPTO_KEY_STATUS_READ_LOCKED;
+        } else if (strcmp(argv[i], "GEN_LOCKED") == 0) {
+            status |= ARM_CRYPTO_KEY_STATUS_GEN_LOCKED;
+        } else if (strcmp(argv[i], "SIGN_LOCKED") == 0) {
+            status |= ARM_CRYPTO_KEY_STATUS_SIGN_LOCKED;
+        } else if (strcmp(argv[i], "HMAC_LOCKED") == 0) {
+            status |= ARM_CRYPTO_KEY_STATUS_HMAC_LOCKED;
+        } else if (strcmp(argv[i], "USAGE_LOCKED") == 0) {
+            status |= ARM_CRYPTO_KEY_STATUS_USAGE_LOCKED;
         } else {
             fprintf(stderr, "Unknown or unsupported key status string: %s\n", argv[i]);
             return -1;

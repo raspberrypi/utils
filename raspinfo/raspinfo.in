@@ -17,7 +17,7 @@ display_info_drm() {
       echo
       kmsprint -p
    else
-      echo "kmsprint is not installed. Install with: sudo apt install kms++-utils"
+      echo "@KMS_NOTFOUND_MSG@"
    fi
 
    echo
@@ -159,12 +159,14 @@ audio_info() {
    echo
    aplay -L
    echo
-   systemctl --user status pipewire.socket pipewire.service pulseaudio.service pulseaudio.socket
+   if command -v systemctl > /dev/null; then
+     systemctl --user status pipewire.socket pipewire.service pulseaudio.service pulseaudio.socket
+   fi
    echo
    if command -v pactl > /dev/null; then
       pactl info
    else
-      echo pactl not installed
+      echo "@PACTL_NOTFOUND_MSG@"
    fi
 }
 
@@ -198,7 +200,7 @@ network_info() {
          fi
       done
    else
-      echo "ethtool not installed"
+      echo "@ETHTOOL_NOTFOUND_MSG@"
    fi
 }
 
@@ -222,8 +224,7 @@ echo
 cat /etc/os-release | head -4
 echo
 
-cat /etc/rpi-issue
-echo
+cat /etc/rpi-issue 2> /dev/null && echo
 uname -a
 
 cat /proc/cpuinfo | tail -3
@@ -264,12 +265,7 @@ echo "Package version information"
 echo "---------------------------"
 echo
 
-apt-cache policy raspberrypi-ui-mods | head -2
-apt-cache policy raspberrypi-sys-mods | head -2
-apt-cache policy openbox | head -2
-apt-cache policy lxpanel | head -2
-apt-cache policy pcmanfm | head -2
-apt-cache policy rpd-plym-splash | head -2
+@PKG_VERSION_CMD@
 
 echo
 echo "Networking Information"
@@ -326,7 +322,7 @@ if command -v pinctrl > /dev/null; then
 elif command -v raspi-gpio > /dev/null; then
    raspi-gpio get 2>&1
 else
-   echo "pinctrl/raspi-gpio not found"
+   echo "@PINCTRL_NOTFOUND_MSG@"
 fi
 
 echo
@@ -339,7 +335,7 @@ if command -v vcdbg > /dev/null; then
 elif command -v vclog > /dev/null; then
    sudo vclog --msg 2>&1
 else
-   echo "vcdbg not found"
+   echo "@VCDBG_NOTFOUND_MSG@"
 fi
 
 echo
@@ -358,6 +354,6 @@ then
    if command -v rpi-eeprom-update > /dev/null; then
       sudo rpi-eeprom-update
    else
-      echo "rpi-eeprom-update not found"
+      echo "@RPI_EEPROM_UPDATE_NOTFOUND_MSG@"
    fi
 fi

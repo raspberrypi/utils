@@ -10,8 +10,8 @@ endif()
 # Set project name
 project(rpifwcrypto)
 
-# Find GnuTLS package
-find_package(GnuTLS REQUIRED)
+# Find OpenSSL package
+find_package(OpenSSL REQUIRED)
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 
@@ -23,8 +23,8 @@ set_target_properties(rpifwcrypto PROPERTIES SOVERSION 0)
 
 # Create the executable
 add_executable(rpi-fw-crypto main.c)
-target_link_libraries(rpi-fw-crypto rpifwcrypto ${GNUTLS_LIBRARIES})
-target_include_directories(rpi-fw-crypto PRIVATE ${GNUTLS_INCLUDE_DIRS})
+# OpenSSL::Crypto automatically provides the correct include directories.
+target_link_libraries(rpi-fw-crypto PRIVATE rpifwcrypto OpenSSL::Crypto)
 
 # Install rules
 install(TARGETS rpi-fw-crypto RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

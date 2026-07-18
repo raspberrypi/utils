@@ -22,11 +22,10 @@ add_subdirectory(vcgencmd)
 add_subdirectory(vclog)
 add_subdirectory(vcmailbox)
 
-# Only build rpifwcrypto if GnuTLS is available
-include(CheckIncludeFile)
-check_include_file(gnutls/crypto.h HAVE_GNUTLS_CRYPTO_H)
-if(HAVE_GNUTLS_CRYPTO_H)
+# Only build rpifwcrypto if OpenSSL is available
+find_package(OpenSSL QUIET)
+if(OPENSSL_FOUND)
     add_subdirectory(rpifwcrypto)
 else()
-    message(STATUS "gnutls/crypto.h not found - skipping rpifwcrypto")
+    message(STATUS "OpenSSL not found - skipping rpifwcrypto")
 endif()

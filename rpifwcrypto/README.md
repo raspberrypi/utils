@@ -18,7 +18,7 @@ or the librpifwcrypto.so shared library.
 
 ## Build Instructions
 
-Install prerequisites with `sudo apt install cmake libgnutls28-dev` - you need at least version 3.10.
+Install prerequisites with `sudo apt install cmake libssl-dev` - you need at least version 3.10.
 
 ```
 mkdir build

@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <gnutls/crypto.h>
+#include <openssl/evp.h>
 #include "rpifwcrypto.h"
 
 #define SHA256_HASH_SIZE 32
@@ -69,53 +69,67 @@ static void usage(const char *progname)
 
 static int hash_file(const char *filename, unsigned char *hash, size_t hash_size)
 {
-    FILE *f;
-    gnutls_hash_hd_t hash_handle;
+    FILE *f = NULL;
+    EVP_MD_CTX *hash_ctx = NULL;
     unsigned char buffer[4096];
-    unsigned char temp_hash[SHA256_HASH_SIZE];
+    unsigned char temp_hash[EVP_MAX_MD_SIZE];
+    unsigned int temp_hash_len = 0;
     size_t bytes;
-    int rc;
+    int rc = -1;
 
     if (hash_size < SHA256_HASH_SIZE) {
         fprintf(stderr, "Hash buffer too small. Need at least %d bytes\n", SHA256_HASH_SIZE);
         return -1;
     }
 
-    if ((rc = gnutls_hash_init(&hash_handle, GNUTLS_DIG_SHA256)) < 0) {
-        fprintf(stderr, "Error initializing hash: %s\n", gnutls_strerror(rc));
+    hash_ctx = EVP_MD_CTX_new();
+    if (!hash_ctx) {
+        fprintf(stderr, "Error allocating hash context\n");
         return -1;
+    }
+
+    if (EVP_DigestInit_ex(hash_ctx, EVP_sha256(), NULL) != 1) {
+        fprintf(stderr, "Error initializing SHA256 hash\n");
+        goto out;
     }
 
     f = fopen(filename, "rb");
     if (!f) {
         perror("Failed to open input file");
-        gnutls_hash_deinit(hash_handle, NULL);
-        return -1;
+        goto out;
     }
 
     while ((bytes = fread(buffer, 1, sizeof(buffer), f)) > 0) {
-        if ((rc = gnutls_hash(hash_handle, buffer, bytes)) < 0) {
-            fprintf(stderr, "Error updating hash: %s\n", gnutls_strerror(rc));
-            fclose(f);
-            gnutls_hash_deinit(hash_handle, NULL);
-            return -1;
+        if (EVP_DigestUpdate(hash_ctx, buffer, bytes) != 1) {
+            fprintf(stderr, "Error updating SHA256 hash\n");
+            goto out;
         }
     }
 
     if (ferror(f)) {
         perror("Error reading file");
-        fclose(f);
-        gnutls_hash_deinit(hash_handle, NULL);
-        return -1;
+        goto out;
     }
 
-    fclose(f);
+    if (EVP_DigestFinal_ex(hash_ctx, temp_hash, &temp_hash_len) != 1) {
+        fprintf(stderr, "Error finalizing SHA256 hash\n");
+        goto out;
+    }
+
+    if (temp_hash_len != SHA256_HASH_SIZE) {
+        fprintf(stderr, "Unexpected SHA256 hash length: %u\n", temp_hash_len);
+        goto out;
+    }
 
     /* Get the hash output, ensuring we don't write beyond the provided buffer */
-    gnutls_hash_deinit(hash_handle, temp_hash);
-    memcpy(hash, temp_hash, hash_size < SHA256_HASH_SIZE ? hash_size : SHA256_HASH_SIZE);
+    memcpy(hash, temp_hash, hash_size < temp_hash_len ? hash_size : temp_hash_len);
+    rc = 0;
 
-    return 0;
+out:
+    if (f)
+        fclose(f);
+    EVP_MD_CTX_free(hash_ctx);
+    return rc;
 }
 
 static int write_hex_output_to_stream(FILE *f, const unsigned char *data, size_t len)

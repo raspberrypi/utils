@@ -21,6 +21,7 @@ add_subdirectory(rpi-gpu-usage)
 add_subdirectory(vcgencmd)
 add_subdirectory(vclog)
 add_subdirectory(vcmailbox)
+add_subdirectory(splashasm)
 
 # Only build rpifwcrypto if GnuTLS is available
 include(CheckIncludeFile)

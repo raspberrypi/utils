@@ -7,3 +7,5 @@ project(ovmerge)
 
 #add executables
 install(PROGRAMS ovmerge DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(PROGRAMS ovmerge.py DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(PROGRAMS ovmerge_engine.py DESTINATION ${CMAKE_INSTALL_BINDIR})

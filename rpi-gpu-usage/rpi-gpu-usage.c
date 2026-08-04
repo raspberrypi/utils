@@ -21,11 +21,13 @@
 #define MAX_CLIENTS 256
 #define MAX_COMM    64
 
-/* Engine indices for the three we display */
-#define ENG_RENDER 0
-#define ENG_TFU    1
-#define ENG_BIN    2
-#define N_ENGINES  3
+/* Engine indices for the queues we display */
+#define ENG_RENDER      0
+#define ENG_TFU         1
+#define ENG_BIN         2
+#define ENG_CSD         3
+#define ENG_CACHE_CLEAN 4
+#define N_ENGINES       5
 
 struct client {
     int id;
@@ -123,9 +125,11 @@ static double read_proc_cpu(int pid)
 /* Map fdinfo engine name to our index, or -1 */
 static int engine_idx(const char *name)
 {
-    if (strcmp(name, "render") == 0) return ENG_RENDER;
-    if (strcmp(name, "tfu") == 0)    return ENG_TFU;
-    if (strcmp(name, "bin") == 0)    return ENG_BIN;
+    if (strcmp(name, "render") == 0)      return ENG_RENDER;
+    if (strcmp(name, "tfu") == 0)         return ENG_TFU;
+    if (strcmp(name, "bin") == 0)         return ENG_BIN;
+    if (strcmp(name, "csd") == 0)         return ENG_CSD;
+    if (strcmp(name, "cache_clean") == 0) return ENG_CACHE_CLEAN;
     return -1;
 }
 
@@ -295,7 +299,7 @@ int main(int argc, char *argv[])
         curs_set(0);
     } else {
         printf("timestamp,client_id,pid,process,"
-               "render%%,tfu%%,bin%%,cpu%%\n");
+               "render%%,tfu%%,bin%%,csd%%,cache_clean%%,cpu%%\n");
     }
 
     struct client prev[MAX_CLIENTS], curr[MAX_CLIENTS];
@@ -322,11 +326,11 @@ int main(int argc, char *argv[])
         if (!csv) {
             clear();
             mvprintw(0, 0, "GPU Utilisation\n\n");
-            printw("%6s  %-8s %-16s %8s %8s %8s %8s\n",
+            printw("%6s  %-7s %-14s %7s %7s %7s %7s %7s %7s\n",
                    "Client", "PID", "Process",
-                   "render", "tfu", "bin", "CPU");
+                   "render", "tfu", "bin", "csd", "clean", "CPU");
             printw("----------------------------------------------"
-                   "------------------------\n");
+                   "--------------------------------\n");
         }
 
         for (int i = 0; i < ncurr; i++) {
@@ -344,15 +348,17 @@ int main(int argc, char *argv[])
             double cpct = wall_dt > 0 ? cpu_d / wall_dt * 100.0 : 0.0;
 
             if (csv)
-                printf("%.3f,%d,%d,%s,%.1f,%.1f,%.1f,%.1f\n",
+                printf("%.3f,%d,%d,%s,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\n",
                        curr_wall, c->id, c->pid, c->comm,
                        pcts[ENG_RENDER], pcts[ENG_TFU], pcts[ENG_BIN],
+                       pcts[ENG_CSD], pcts[ENG_CACHE_CLEAN],
                        cpct);
             else
-                printw("%6d  %-8d %-16s"
-                       " %7.1f%% %7.1f%% %7.1f%% %7.1f%%\n",
+                printw("%6d  %-7d %-14s"
+                       " %6.1f%% %6.1f%% %6.1f%% %6.1f%% %6.1f%% %6.1f%%\n",
                        c->id, c->pid, c->comm,
                        pcts[ENG_RENDER], pcts[ENG_TFU], pcts[ENG_BIN],
+                       pcts[ENG_CSD], pcts[ENG_CACHE_CLEAN],
                        cpct);
         }
 

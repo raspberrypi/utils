@@ -22,16 +22,16 @@ information to find the processes that have drm stats information like:
 ```
 
 The application then outputs total GPU usage for the renderer (shaders)
-tfu (texture format unit) and binning blocks.  It also reads the total CPU
-usage for that process.
+tfu (texture format unit), binning, csd (compute shader dispatch) and
+cache_clean blocks.  It also reads the total CPU usage for that process.
 
 ```
 GPU Utilisation
 
-Client  PID      Process            render      tfu      bin      CPU
-----------------------------------------------------------------------
-    14  2215     labwc               13.2%     0.0%     0.3%    18.7%
-    38  10668    chromium             0.0%     0.0%     0.0%     0.0%
+Client  PID     Process         render     tfu     bin     csd   clean     CPU
+------------------------------------------------------------------------------
+    14  2215    labwc            13.2%    0.0%    0.3%    0.0%    0.0%   18.7%
+   187  10982   litert-lm         0.0%    0.0%    0.0%   99.8%    0.2%   99.4%
 ```
 
 **Command line options**

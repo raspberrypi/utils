@@ -11,7 +11,15 @@ It reads per-process GPU engine times from DRM fdinfo and global
 utilisation from the V3D gpu_stats sysfs interface.
 .PP
 The display is refreshed once per second, showing per-client
-GPU engine usage (render, tfu, bin) and CPU usage.
+GPU engine usage (render, tfu, bin, csd, cache_clean) and CPU usage.
+.PP
+Note that compute workloads (OpenCL, Vulkan compute, ML inference)
+run on the
+.B csd
+queue rather than the render queue, so they will only be visible in
+the
+.B csd
+column.
 .SH OPTIONS
 .TP
 .B \-\-csv

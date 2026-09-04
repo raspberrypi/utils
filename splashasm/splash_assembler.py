@@ -17,6 +17,7 @@ import sys
 
 FILE_DIR = ""
 MAGIC = b'SPLASH ASM\x00\x00\x00\x00\x00'
+version = 1
 
 class WireProtocols(Enum):
     I2C = "i2c"
@@ -59,12 +60,14 @@ class SPI_PARAMS(Enum):
     CPHA: Param = Param(default=1, allowed_values=(1, 2))
     CSPOL: Param = Param(default=1, allowed_values=(1, 2))
     FREQ: Param = Param(default=25000000)
+    PORT: Param = Param(default=0)
 
 class I2C_PARAMS(Enum):
     SDA: Param = Param(default=2, allowed_values=(2,))
     SCL: Param = Param(default=3, allowed_values=(3,))
     ADDR: Param = Param(default=0xFF)
     FREQ: Param = Param(default=100000)
+    PORT: Param = Param(default=1)
 
 class State:
     lines: str
@@ -297,6 +300,7 @@ class Define(Instruction):
         return define
 
     def _do_emit_binary(self, state, arr_ptr):
+        global version
         arr_ptr.extend(Instructions.DEFINE.value)
 
         arr_ptr.extend(bytearray("SPI " if self.protocol_type == WireProtocols.SPI else "I2C ", 'ascii'))
@@ -308,15 +312,20 @@ class Define(Instruction):
 
         if self.protocol_type == WireProtocols.SPI:
             default_params = SPI_PARAMS
+            if "PORT" in values.keys():
+                version = max(version, 2)
+
         elif self.protocol_type == WireProtocols.I2C:
             default_params = I2C_PARAMS
+            if "PORT" in values.keys():
+                version = max(version, 2)
 
         for p in default_params:
             if p.name not in values.keys() and p.value.default is not None:
                 print(f"Didn't specify nessercary param {p.name} in {self.__class__.__name__} on in file {self.file_name} on line {self.start_line}, defaulting to {p.value.default}")
                 values[p.name] = p.value.default
             elif p.name in values.keys() and not p.value.check(values[p.name]):
-                raise ValueError(f"{p.name} cannot be set to {values[p.name]}, the only valid options are {", ".join(str(v) for v in p.value.allowed_values)}")
+                print(f"{p.name} set to {values[p.name]}, the options are {", ".join(str(v) for v in p.value.allowed_values)} are you sure?")
             elif p.name not in values.keys() and p.value.default is None:
                 values[p.name] = 0xFF
 
@@ -327,11 +336,14 @@ class Define(Instruction):
                              values["CPHA"], values["CSPOL"]])
             packed += values["FREQ"].to_bytes(4, byteorder='little')
         else:
+            if version == 1:
+                values["PORT"] = 0
             packed = bytes([values["SDA"], values["SCL"], values["ADDR"], 0])
             packed += values["FREQ"].to_bytes(4, byteorder='little')
 
         arr_ptr.append(len(packed))
-        arr_ptr.extend(b'\x00\x00\x00')  # reserved (struct padding after param_len)
+        arr_ptr.append(values["PORT"] & 0xff)
+        arr_ptr.extend(b'\x00\x00')  # reserved (struct padding after param_len)
         arr_ptr.extend(packed)
 
 class Delay(Instruction):
@@ -591,11 +603,11 @@ def pretty_print(data):
     return '\n'.join(lines)
 
 def make_file(input_file):
+    body = compile_file(input_file)
     buf = bytearray()
-    buf.extend(MAGIC) # magic
-    buf.append(1) # version
-
-    buf.extend(compile_file(input_file))
+    buf.extend(MAGIC)
+    buf.append(version)
+    buf.extend(body)
 
     return buf
 

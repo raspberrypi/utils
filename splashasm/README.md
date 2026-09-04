@@ -109,7 +109,7 @@ What are valid params for each instruction are better defined in the binary docs
    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
    |                       Protocol four cc                        |
    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |     Size      |                    Reserved                   |
+   |     Size      |     Port      |           Reserved            |
    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
    |                                                               :
    :                          Parameters                           :
@@ -119,7 +119,11 @@ What are valid params for each instruction are better defined in the binary docs
     Protocol : A four cc code, currently either "SPI " or "I2C "
     Size     : length in bytes of the parameters block that follows.
                This is unique to a four cc and file version
-    Reserved : three pad bytes (struct alignment after Size), always 0x00
+    Port     : Sets the output block we will be writing to, this
+               needs to be in agreement with the pins to get an
+               output. Not relevant for Pis earlier than the Pi 5
+    Reserved : three pad bytes (struct alignment after Size), always 
+               0x00
 
     Defines are implicitly numbered: the index used later by
     COMMAND's "Out idx" field is just the order in which DEFINE
@@ -211,7 +215,6 @@ What are valid params for each instruction are better defined in the binary docs
 
 ## Limitations
 
-- This is currently incompatible with the Pi 5 family
 - You can have a maximum of 4 SPI defines
 - You can have a maximum of 10 I2C defines
 - The delays are blocking and therefore a long splash description will slow down a boot

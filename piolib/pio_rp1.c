@@ -272,6 +272,13 @@ static int rp1_pio_sm_config_xfer(PIO pio, uint sm, uint dir, uint buf_size, uin
     return err;
 }
 
+static int rp1_pio_sm_config_xfer_flags(PIO pio, uint sm, uint dir, uint buf_size, uint buf_count, uint flags)
+{
+    struct rp1_pio_sm_config_xfer_v2_args args = { .sm = sm, .dir = dir, .buf_size = buf_size, .buf_count = buf_count, .flags = flags };
+    check_sm_param(sm);
+    return rp1_ioctl(pio, PIO_IOC_SM_CONFIG_XFER_V2, &args);
+}
+
 static int rp1_pio_sm_xfer_data(PIO pio, uint sm, uint dir, uint data_bytes, void *data)
 {
     struct rp1_pio_sm_xfer_data_args args = { .sm = sm, .dir = dir, .data_bytes = data_bytes, .rsvd = 0, .data = data };
@@ -990,6 +997,7 @@ DECLARE_PIO_CHIP(rp1) {
     .close_instance = rp1_close_instance,
 
     .pio_sm_config_xfer = rp1_pio_sm_config_xfer,
+    .pio_sm_config_xfer_flags = rp1_pio_sm_config_xfer_flags,
     .pio_sm_xfer_data = rp1_pio_sm_xfer_data,
 
     .pio_can_add_program_at_offset = rp1_pio_can_add_program_at_offset,

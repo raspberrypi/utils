@@ -65,6 +65,14 @@ enum pio_xfer_dir {
     PIO_DIR_COUNT
 };
 
+enum pio_dma_flags {
+    PIO_DMA_PREFER_HEAVY = (0 << 0),
+    PIO_DMA_PREFER_LIGHT = (1 << 0),
+    PIO_DMA_FORCE_HEAVY  = (2 << 0),
+    PIO_DMA_FORCE_LIGHT  = (3 << 0),
+    PIO_DMA_CYCLIC       = (1 << 2),
+};
+
 enum pio_sm_flags {
     PIO_SM_FLAG_TXSTALL = 0x0001,
     PIO_SM_FLAG_RXSTALL = 0x0002,
@@ -134,6 +142,7 @@ struct pio_chip {
     void (*close_instance)(PIO pio);
 
     int (*pio_sm_config_xfer)(PIO pio, uint sm, uint dir, uint buf_size, uint buf_count);
+    int (*pio_sm_config_xfer_flags)(PIO pio, uint sm, uint dir, uint buf_size, uint buf_count, uint flags);
     int (*pio_sm_xfer_data)(PIO pio, uint sm, uint dir, uint data_bytes, void *data);
 
     bool (*pio_can_add_program_at_offset)(PIO pio, const pio_program_t *program, uint offset);
@@ -311,6 +320,12 @@ static inline int pio_sm_config_xfer(PIO pio, uint sm, uint dir, uint buf_size, 
 {
     check_pio_param(pio);
     return pio->chip->pio_sm_config_xfer(pio, sm, dir, buf_size, buf_count);
+}
+
+static inline int pio_sm_config_xfer_flags(PIO pio, uint sm, uint dir, uint buf_size, uint buf_count, uint flags)
+{
+    check_pio_param(pio);
+    return pio->chip->pio_sm_config_xfer_flags(pio, sm, dir, buf_size, buf_count, flags);
 }
 
 static inline int pio_sm_xfer_data(PIO pio, uint sm, uint dir, uint data_bytes, void *data)

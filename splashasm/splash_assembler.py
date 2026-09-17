@@ -56,9 +56,9 @@ class SPI_PARAMS(Enum):
     CS: Param = Param(default=8)
     SCLK: Param = Param(default=11)
     DC: Param = Param(default=None)
-    CPOL: Param = Param(default=1, allowed_values=(1, 2))
-    CPHA: Param = Param(default=1, allowed_values=(1, 2))
-    CSPOL: Param = Param(default=1, allowed_values=(1, 2))
+    CPOL: Param = Param(default=0, allowed_values=(0, 1))
+    CPHA: Param = Param(default=0, allowed_values=(0, 1))
+    CSPOL: Param = Param(default=0, allowed_values=(0, 1))
     FREQ: Param = Param(default=25000000)
     PORT: Param = Param(default=0)
 
@@ -312,7 +312,7 @@ class Define(Instruction):
 
         if self.protocol_type == WireProtocols.SPI:
             default_params = SPI_PARAMS
-            if "PORT" in values.keys():
+            if "PORT" in values.keys() or "CPOL" in values.keys() or "CPHA" in values.keys() or "CSPOL" in values.keys():
                 version = max(version, 2)
 
         elif self.protocol_type == WireProtocols.I2C:
@@ -322,24 +322,37 @@ class Define(Instruction):
 
         for p in default_params:
             if p.name not in values.keys() and p.value.default is not None:
-                print(f"Didn't specify nessercary param {p.name} in {self.__class__.__name__} on in file {self.file_name} on line {self.start_line}, defaulting to {p.value.default}")
+                print(f"Didn't specify necessary param {p.name} in {self.__class__.__name__} in file {self.file_name} on line {self.start_line}, defaulting to {p.value.default}")
                 values[p.name] = p.value.default
             elif p.name in values.keys() and not p.value.check(values[p.name]):
                 print(f"{p.name} set to {values[p.name]}, the options are {", ".join(str(v) for v in p.value.allowed_values)} are you sure?")
             elif p.name not in values.keys() and p.value.default is None:
                 values[p.name] = 0xFF
 
+        if self.protocol_type == WireProtocols.SPI:
+            if version == 1:
+                values["CPOL"] += 1
+                values["CSPOL"] += 1
+                values["CPHA"] += 1
 
         if self.protocol_type == WireProtocols.SPI:
             packed = bytes([values["COPI"], values["CIPO"], values["SCLK"], values["CS"],
                              values["DC"], values["CPOL"],
                              values["CPHA"], values["CSPOL"]])
             packed += values["FREQ"].to_bytes(4, byteorder='little')
+            if values["PORT"] != 0:
+                version = max(version, 2)
+            else:
+                values["PORT"] = 0
         else:
             if version == 1:
                 values["PORT"] = 0
             packed = bytes([values["SDA"], values["SCL"], values["ADDR"], 0])
             packed += values["FREQ"].to_bytes(4, byteorder='little')
+            if values["PORT"] != 1:
+                version = max(version, 2)
+            else:
+                values["PORT"] = 0
 
         arr_ptr.append(len(packed))
         arr_ptr.append(values["PORT"] & 0xff)

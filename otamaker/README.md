@@ -59,6 +59,9 @@ artefact:
   device_type: rpi5
 
   payloads:
+  - name: preinstall
+    type: script
+    pre_checksum: yes
   - name: boot          # boot.sparse
     type: image-sparse
   - name: system        # system.sparse
@@ -69,7 +72,7 @@ artefact:
     type: script
 ```
 
-Any fields and payload types which aren't recognised are ignored. However, an error is returned if an update doesn't either write to at least one filesystem or include a script.
+Any fields which aren't recognised are ignored. However, an error is returned if an update doesn't either write to at least one filesystem or include a script.
 
 N.B. Although the contents file is structured as a YAML document, only a simple subset of the YAML standard is recognised. It is recommended that you stick to the structure above - anything clever is likely to fail.
 
@@ -86,6 +89,8 @@ The following payload types are recognised:
 * `tmpfile` - some other file to be copied to the device for the duration of the update. These are intended to be used by scripts, which they must appear before in the list of payloads in order to be accessible.
 
 Comments immediately after (and on the same line as) the `name` field are interpreted by otamaker as a path to the source file. These comments are removed when the final archive is created.
+
+The `pre_checksum` boolean field controls when the payload is processed: if `yes`, the payload is written or executed as the artefact is being downloaded, and if `no` the processing is deferred until the end of the download when the checksum/hash of the artefact has been verified. Using pre-checksum payloads saves time and temporary storage, important for large image payloads, but they do bypass the integrity check, so are best used for pre-install checks and A/B slot updates where rollback is easy. Note that the default value for `pre_checksum` is `yes` for image payloads, and `no` otherwise.
 
 **Scripts**
 

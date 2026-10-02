@@ -2,7 +2,7 @@
 
 ## Introduction
 
-A toy language and binary format for describing SPI & I2C dumps, aimed at putting splash screens on SPI & I2C displays during vc4 boot on Raspberry Pis. This currently only supports non RP1 RPis, i.e. everything but the Pi 5.
+A toy language and binary format for describing SPI & I2C dumps, aimed at putting splash screens on SPI & I2C displays during vc4 boot on Raspberry Pis
 
 ## Usage
 
@@ -25,7 +25,7 @@ A toy language and binary format for describing SPI & I2C dumps, aimed at puttin
 
 ## The language
 
-There are five kinds of instructions you can write
+There are five kinds of instructions you can write:
 
 - `define`
 - `command` - this is not a keyword, you write the command name as defined in define to invoke it
@@ -109,7 +109,7 @@ What are valid params for each instruction are better defined in the binary docs
    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
    |                       Protocol four cc                        |
    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-   |     Size      |                    Reserved                   |
+   |     Size      |     Port      |           Reserved            |
    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
    |                                                               :
    :                          Parameters                           :
@@ -119,7 +119,11 @@ What are valid params for each instruction are better defined in the binary docs
     Protocol : A four cc code, currently either "SPI " or "I2C "
     Size     : length in bytes of the parameters block that follows.
                This is unique to a four cc and file version
-    Reserved : three pad bytes (struct alignment after Size), always 0x00
+    Port     : Sets the output block we will be writing to, this
+               needs to be in agreement with the pins to get an
+               output. Not relevant for Pis earlier than the Pi 5
+    Reserved : two pad bytes (struct alignment after Size), always
+               0x00
 
     Defines are implicitly numbered: the index used later by
     COMMAND's "Out idx" field is just the order in which DEFINE
@@ -149,15 +153,14 @@ What are valid params for each instruction are better defined in the binary docs
    |                           Frequency                           |
    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-    CPOL/CPHA  : SPI mode bits (default mode 0)
-    CPOL       : clock polarity, if 1 the data is transmitted on
-                 rising edges, if 2 the data is transmitted on
-                 falling edges (default 1)
-    CSPOL      : chip-select polarity active-low is 1
-                 active high is 2, (default 1)
-    CPHA       : clock phase, if 1 the clock transitions in the
-                 middle of bits, if 2, the data transitions are in
-                 phase with the clock
+    CPOL       : clock polarity, if 0 the data is transmitted on
+                 rising edges, if 1 the data is transmitted on
+                 falling edges (default 0)
+    CSPOL      : chip-select polarity active-low is 0
+                 active high is 1 (default 0)
+    CPHA       : clock phase, if 0 the clock transitions in the
+                 middle of bits, if 1, the data transitions are in
+                 phase with the clock (default 0)
 
 -----------------------------------------------------------------------
             4. COMMAND (0x10) - 5-byte header + #Size data
@@ -211,7 +214,6 @@ What are valid params for each instruction are better defined in the binary docs
 
 ## Limitations
 
-- This is currently incompatible with the Pi 5 family
 - You can have a maximum of 4 SPI defines
 - You can have a maximum of 10 I2C defines
 - The delays are blocking and therefore a long splash description will slow down a boot

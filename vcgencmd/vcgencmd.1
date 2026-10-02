@@ -43,15 +43,6 @@ Displays the error log status of the various VideoCore software areas.
 Displays the build date and version of the firmware on the VideoCore.
 .
 .TP
-.B get_camera
-Displays the enabled and detected state of the official camera. 1 means yes, 0
-means no. Whilst all firmware (except cutdown versions) will support the camera,
-this support needs to be enabled by using the
-.I start_x
-boot option
-.BR [BOOT] .
-.
-.TP
 .B get_throttled
 Returns the throttled state of the system. This is a bit pattern - a bit being
 set indicates the following meanings:
@@ -190,10 +181,6 @@ parameter are
 or simply use the name of the configuration item.
 .
 .TP
-.B get_lcd_info
-Displays the resolution and colour depth of any attached display.
-.
-.TP
 .B mem_oom
 Displays statistics on any Out Of Memory events occuring in the VC4 memory
 space.
@@ -205,54 +192,6 @@ Displays statistics from the relocatable memory allocator on the VC4.
 .TP
 .B read_ring_osc
 Returns the curent speed voltage and temperature of the ring oscillator.
-.
-.TP
-.B hdmi_timings
-Displays the current HDMI settings timings. See
-.B [VIDEO]
-for details of the values returned. 
-.
-.TP
-.B dispmanx_list
-Dump a list of all dispmanx items currently being displayed.
-.
-.TP
-.BI display_power \ 0|1|-1
-.TQ
-.BI display_power " 0|1|-1 display"
-Show current display power state, or set the display power state.
-.I vcgencmd display_power 0
-will turn off power to the current display.
-.I vcgencmd display_power 1
-will turn on power to the display. If no parameter is set, this will display
-the current power state. The final parameter is an optional display ID, as
-returned by
-.I tvservice -l
-or from the table below, which allows a specific display to be turned on or
-off.
-.IP
-.I vcgencmd display_power 0 7
-will turn off power to display ID 7, which is HDMI 1 on a Raspberry Pi 4.
-.TS
-tab(|);
-l l .
-Display|ID
-\_|\_
-.T&
-l n .
-Main LCD|0
-Secondary LCD|1
-HDMI 0|2
-Composite|3
-HDMI 1|7
-.TE
-.IP
-To determine if a specific display ID is on or off, use -1 as the first
-parameter.
-.IP
-.I vcgencmd display_power -1 7
-will return 0 if display ID 7 is off, 1 if display ID 7 is on, or -1 if display
-ID 7 is in an unknown state, for example undetected. 
 .
 .
 .SH EXIT STATUS

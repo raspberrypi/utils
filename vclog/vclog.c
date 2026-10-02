@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <netinet/in.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -75,6 +76,9 @@ enum
 #define ARRAY_SIZE(_a) (sizeof(_a)/sizeof(_a[0]))
 
 #define FBIODMACOPY _IOW('z', 0x22, struct fb_dmacopy)
+#define IOCTL_MBOX_PROPERTY _IOWR(100, 0, char *)
+#define MBOX_TAG_GET_VC_MEMORY 0x00010006
+#define MIN_GPU_MEM_FOR_LOGS (16 * 1024 * 1024)
 
 #ifdef DEBUG
 #define DLOG(...) printf(__VA_ARGS__)
@@ -104,12 +108,13 @@ static int dma_fd = -1;
 static char *vc_map = MAP_FAILED;
 
 static bool find_logs(uint32_t *logs_start, uint32_t *logs_size);
+static bool get_gpu_mem_size(uint32_t *size);
 static bool prepare_vc_mapping(uint32_t vc_start, uint32_t vc_size);
 static void destroy_vc_mapping(void);
 static void read_vc_mem(uint32_t vc_addr, uint32_t size, void *dest);
 static uint32_t log_copy_wrap(const char *log_buffer, uint32_t log_size,
                               uint32_t offset, uint32_t len, char *dest);
-static void die(const char *msg);
+static void die(const char *fmt, ...) __attribute__((format(printf, 1, 2), noreturn));
 
 int32_t main(int32_t argc, char *argv[])
 {
@@ -143,7 +148,14 @@ int32_t main(int32_t argc, char *argv[])
     
     // find the address and size of the logs in VC memory
     if (!find_logs(&logs_start_vc, &logs_size))
+    {
+        uint32_t gpu_mem;
+
+        if (get_gpu_mem_size(&gpu_mem) && gpu_mem <= MIN_GPU_MEM_FOR_LOGS)
+            die("Logs are not available with gpu_mem=%u. "
+                "Increase gpu_mem in config.txt", gpu_mem >> 20);
         die("Could not determine logs location from Device Tree");
+    }
 
     if (!prepare_vc_mapping(logs_start_vc, logs_size))
         die("Cannot access logs");
@@ -355,6 +367,29 @@ exit:
     return ret;
 }
 
+static bool get_gpu_mem_size(uint32_t *size)
+{
+    uint32_t buf[8] = {
+        sizeof(buf), 0,
+        MBOX_TAG_GET_VC_MEMORY, 8, 0, 0, 0,
+        0
+    };
+    int fd;
+    int err;
+
+    fd = open("/dev/vcio", 0);
+    if (fd < 0)
+        return false;
+
+    err = ioctl(fd, IOCTL_MBOX_PROPERTY, buf);
+    close(fd);
+    if (err < 0 || buf[1] != 0x80000000)
+        return false;
+
+    *size = buf[6];
+    return true;
+}
+
 static bool prepare_vc_mapping(uint32_t vc_start, uint32_t vc_size)
 {
     const char *dma_filenames[] = { "/dev/vc-mem", "/dev/fb0" };
@@ -498,8 +533,14 @@ static uint32_t log_copy_wrap(const char *log_buffer, uint32_t log_size,
     }
 }
 
-static void die(const char *msg)
+static void die(const char *fmt, ...)
 {
-    fprintf(stderr, "Fatal error: %s\n", msg);
+    va_list ap;
+
+    va_start(ap, fmt);
+    fprintf(stderr, "Fatal error: ");
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    va_end(ap);
     exit(EXIT_FAILURE);
 }

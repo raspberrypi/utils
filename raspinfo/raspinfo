@@ -8,6 +8,11 @@
 
 alias filter="sed -e 's/\([0-9a-fA-F]\{1,4\}:\)\{7,7\}[0-9a-fA-F]\{1,4\}/y.y.y.y.y.y.y.y/g' | sed -e 's/[0-9a-fA-F]\{1,4\}:\(:[0-9a-fA-F]\{1,4\}\)\{1,4\}/y::y.y.y.y/g' | sed -e 's/\([0-9]\{1,3\}\.\)\{3,3\}[0-9]\{1,3\}/x.x.x.x/g' | sed -e 's/\([0-9a-fA-F]\{2,2\}\:\)\{5,5\}[0-9a-fA-F]\{2,2\}/m.m.m.m/g'"
 
+# True if the firmware registers the given vcgencmd command (Pi 5 lacks several)
+vcgencmd_has() {
+   vcgencmd commands | tr ',="' '   ' | grep -qw -- "$1"
+}
+
 display_info_drm() {
    # kmsprint is more useful, but not always installed
    if command -v kmsprint > /dev/null; then
@@ -235,9 +240,12 @@ echo "Camera Information"
 echo "------------------"
 echo
 
-if command -v libcamera-hello > /dev/null; then
+# libcamera-hello was renamed rpicam-hello; current images only have the new name
+if command -v rpicam-hello > /dev/null; then
+    rpicam-hello --list
+elif command -v libcamera-hello > /dev/null; then
     libcamera-hello --list
-else
+elif vcgencmd_has get_camera; then
     echo "Camera          : "`vcgencmd get_camera`
 fi
 
@@ -247,8 +255,11 @@ echo "---------------------"
 echo
 
 vcgencmd version
-echo
-vcgencmd mem_reloc_stats
+# Pi 5 has no relocatable heap, so its firmware does not register this command
+if vcgencmd_has mem_reloc_stats; then
+   echo
+   vcgencmd mem_reloc_stats
+fi
 
 echo
 echo "Filesystem information"

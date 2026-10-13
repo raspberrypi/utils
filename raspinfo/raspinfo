@@ -360,9 +360,8 @@ echo
 
 sudo dmesg | filter
 
-# Pi 4 family by revision code; every BCM2712 board (Pi 5, Pi 500, CM5) by SoC
-if  grep -q "^Revision\s*:\s*[ 123][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]1[13457][0-9a-fA-F]$" /proc/cpuinfo ||
-    grep -q bcm2712 /proc/device-tree/compatible 2>/dev/null
+# Boards with a bootloader EEPROM: BCM2711 (Pi 4, Pi 400, CM4) and BCM2712 (Pi 5, Pi 500, CM5)
+if grep -q -e bcm2711 -e bcm2712 /proc/device-tree/compatible 2>/dev/null
 then
    echo
    echo "EEPROM"

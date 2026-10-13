@@ -360,7 +360,9 @@ echo
 
 sudo dmesg | filter
 
-if  grep -q "^Revision\s*:\s*[ 123][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]1[13457][0-9a-fA-F]$" /proc/cpuinfo
+# Pi 4 family by revision code; every BCM2712 board (Pi 5, Pi 500, CM5) by SoC
+if  grep -q "^Revision\s*:\s*[ 123][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]1[13457][0-9a-fA-F]$" /proc/cpuinfo ||
+    grep -q bcm2712 /proc/device-tree/compatible 2>/dev/null
 then
    echo
    echo "EEPROM"

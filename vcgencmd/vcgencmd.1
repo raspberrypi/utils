@@ -86,9 +86,12 @@ previously been throttled due to under-voltage, but is not currently throttled
 for any reason.
 .
 .TP
-.B measure_temp
+.BR measure_temp " [" pmic ]
 Returns the temperature of the SoC as measured by the on-board temperature
 sensor.
+On Raspberry Pi 5,
+.I vcgencmd measure_temp pmic
+returns the temperature of the PMIC instead.
 .
 .TP
 .BI measure_clock \ clock
@@ -128,6 +131,27 @@ sdram_c|
 sdram_i|
 sdram_p|
 .TE
+.
+.TP
+.BR pmic_read_adc " [" \fIchannel\fR ]
+On Raspberry Pi 5, displays the readings of the ADCs in the PMIC: the current
+drawn from and the voltage of each PMIC supply rail, plus the external 5V
+supply voltage
+.RB ( EXT5V_V ).
+Without a parameter, every channel is listed, one per line, for example:
+.IP
+.EX
+  VDD_CORE_A current(7)=0.51794000A
+  VDD_CORE_V volt(15)=0.75186740V
+     EXT5V_V volt(24)=5.06788000V
+.EE
+.IP
+To read a single channel, pass its name, for example
+.IR "vcgencmd pmic_read_adc EXT5V_V" .
+If the name is not recognised, every channel is listed.
+.IP
+The readings do not include USB current or anything else powered directly from
+the 5V supply, because that power does not pass through the PMIC.
 .
 .TP
 .B otp_dump
@@ -182,26 +206,31 @@ or simply use the name of the configuration item.
 .
 .TP
 .B mem_oom
-Displays statistics on any Out Of Memory events occuring in the VC4 memory
+Displays statistics on any Out Of Memory events occurring in the VC4 memory
 space.
+Not available on Raspberry Pi 5.
 .
 .TP
 .B mem_reloc_stats
 Displays statistics from the relocatable memory allocator on the VC4.
+Not available on Raspberry Pi 5.
 .
 .TP
 .B read_ring_osc
-Returns the curent speed voltage and temperature of the ring oscillator.
+Returns the current speed voltage and temperature of the ring oscillator.
 .
 .
 .SH EXIT STATUS
 .
 .IP 0
 Command completed successfully
-.IP -1
-Problem with VHCI
-.IP -2
-VideoCore returned an error
+.IP "non-zero"
+The mailbox device could not be opened, or VideoCore returned an error.
+The shell sees the low 8 bits of the error value, so an error of \-1 is
+reported as 255.
+For example, a command that the firmware does not provide prints
+.I \%error_msg="Command not \%registered"
+and exits with status 255.
 .
 .
 .SH SEE ALSO

@@ -7,6 +7,24 @@ Each payload is read from the file named by its 'source:' key, or by a comment
 on its 'name:' line (the older form), or failing both by its name. Paths are
 relative to the current directory, or to -C <dir>. 'source:'
 is dropped from the copy of the contents in the artefact.
+
+-t builds a transitional artefact, which applicators can install either as a
+manifest (format 2) artefact or, if they predate manifests, as a legacy
+artefact. -m builds a manifest-only artefact, and -l a legacy one. The default
+is currently -t.
+
+Manifests can be signed with ed25519 keys (-k), e.g. made with:
+  openssl genpkey -algorithm ed25519 -out key.pem
+A device which has a trusted keys file (/etc/rpi-connect/rpi-ota-trusted-keys)
+only accepts artefacts signed by one of its keys. --print-pubkey prints the
+line to add to that file for a key.
+
+To sign with a key which otamaker can't use directly (e.g. in an HSM), run
+otamaker with --signed-data to write the data to be signed, sign it, and run
+otamaker again with the same contents and payloads, adding -s with a file
+holding the line:
+  ed25519 <key id> <base64 signature>
+where the key id is as printed by --print-pubkey.
 """
 
 # Author: Phil Elwell <phil@raspberrypi.com>
@@ -41,6 +59,8 @@ import os
 import re
 import sys
 import argparse
+import base64
+import hashlib
 import shutil
 import subprocess
 import tempfile
@@ -50,19 +70,184 @@ BLOCK_HEADER = 1
 BLOCK_PAYLOADS = 2
 
 CONTENTS_FILE = '_contents_.yaml'
+MANIFEST_FILE = '_manifest_.yaml'
+SIGNATURE_FILE = '_manifest_.sig'
+# Signatures are over this, followed by the manifest
+SIGNATURE_DOMAIN = b'rpi-ota-manifest-v1\n'
+MAX_SIGNATURE_FILE_SIZE = 4096
+# Format 1 is legacy. The format is raised for changes to the manifest which
+# older applicators must not ignore, so a manifest has the lowest format which
+# covers its contents. The contents file may ask for a higher one.
+FIRST_MANIFEST_FORMAT = 2
+MANIFEST_FORMAT = 2     # The highest supported format
+DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024
+MAX_CHUNK_SIZE = 64 * 1024 * 1024
+# Keys which otamaker generates for a manifest
+MANIFEST_KEYS = ('size', 'sha256', 'chunk_size')
 
-# Must be kept up to date with new payload types
-KNOWN_PAYLOAD_TYPES = ('image-sparse', 'script', 'tmpfile', 'eeprom-ab')
+# The first artefact format which supports each payload type. Format 1 types
+# can be installed by applicators which predate manifests.
+PAYLOAD_TYPES = {
+    'image-sparse': 1,
+    'script': 1,
+    'tmpfile': 1,
+    'eeprom-ab': 1,
+    'tar': 2,
+}
 
 # The final artefact is already zstd-compressed as a whole, so an
 # individually-compressed payload (e.g. 'boot.sparse.zst' instead of
 # 'boot.sparse') is almost always a mistake.
 COMPRESSED_SUFFIXES = ('.zst', '.gz', '.bz2', '.xz', '.lz4', '.tgz', '.tzst')
 
+def parse_size(text):
+    m = re.match(r'^(\d+)([KkMm]?)$', text)
+    if not m:
+        raise argparse.ArgumentTypeError(f"invalid size '{text}'")
+    size = int(m.group(1)) * {'': 1, 'k': 1024, 'm': 1024 * 1024}[m.group(2).lower()]
+    if size < 1 or size > MAX_CHUNK_SIZE:
+        raise argparse.ArgumentTypeError(f"size must be between 1 and {MAX_CHUNK_SIZE}")
+    return size
+
+def file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, 'rb') as fh:
+        while True:
+            buf = fh.read(1024 * 1024)
+            if not buf:
+                break
+            h.update(buf)
+    return h.hexdigest()
+
+def chunk_digests(path, chunk_size):
+    digests = []
+    with open(path, 'rb') as fh:
+        while True:
+            buf = fh.read(chunk_size)
+            if not buf:
+                break
+            digests.append(hashlib.sha256(buf).digest())
+    return b''.join(digests)
+
+def openssl(args, input=None):
+    r = subprocess.run(['openssl'] + args, input=input, capture_output=True)
+    if r.returncode != 0:
+        print(f"* error: openssl {' '.join(args)}: {r.stderr.decode(errors='replace').strip()}")
+        sys.exit(1)
+    return r.stdout
+
+def public_key(keyfile):
+    """Return the raw ed25519 public key from a private or public key file"""
+    r = subprocess.run(['openssl', 'pkey', '-in', keyfile, '-pubout', '-outform', 'DER'],
+                       capture_output=True)
+    if r.returncode != 0:
+        r = subprocess.run(['openssl', 'pkey', '-pubin', '-in', keyfile, '-outform', 'DER'],
+                           capture_output=True)
+    # A DER ed25519 public key is a fixed 12 byte header, then the key
+    if r.returncode != 0 or len(r.stdout) != 44:
+        print(f"* error: '{keyfile}' is not an ed25519 key")
+        sys.exit(1)
+    return r.stdout[12:]
+
+def key_id(pubkey):
+    return hashlib.sha256(pubkey).hexdigest()[:16]
+
+def sign_manifest(keyfile, manifest_path):
+    """Return a signature line for the manifest"""
+    with open(manifest_path, 'rb') as fh:
+        data = SIGNATURE_DOMAIN + fh.read()
+    with tempfile.NamedTemporaryFile() as tbs:
+        tbs.write(data)
+        tbs.flush()
+        sig = openssl(['pkeyutl', '-sign', '-rawin', '-inkey', keyfile, '-in', tbs.name])
+    if len(sig) != 64:
+        print(f"* error: '{keyfile}' did not make an ed25519 signature")
+        sys.exit(1)
+    return f'ed25519 {key_id(public_key(keyfile))} {base64.b64encode(sig).decode()}'
+
+def build_manifest(contents, payloads_idx, groups, tmpdir, chunk_size, manifest_format):
+    """Return the manifest lines and the archive member names (in order).
+
+    Each payload gains a size and either a sha256, or (for payloads larger
+    than chunk_size) a chunk_size and a preceding hashlist payload
+    (<name>.hashes) holding the SHA256 of each chunk."""
+    header = [line for line in contents[:payloads_idx] if not re.match(r'^\s+format:', line)]
+    for i, line in enumerate(header):
+        if line.strip() == 'artefact:':
+            header.insert(i + 1, f'  format: {manifest_format}')
+            break
+    out = header + [contents[payloads_idx]]
+    members = [MANIFEST_FILE]
+    names = {g['name'] for g in groups}
+
+    for g in groups:
+        path = os.path.join(tmpdir, g['name'])
+        if not os.path.isfile(path):
+            print(f"* error: payload {g['name']} is not a regular file")
+            sys.exit(1)
+        size = os.path.getsize(path)
+        # Match the indentation of the payload list
+        m = re.match(r'^(\s*)-(\s*)', g['lines'][0])
+        item = m.group(1)
+        indent = item + ' ' + m.group(2)
+        lines = [line for line in g['lines']
+                 if not re.match(r'^\s*-?\s*(' + '|'.join(MANIFEST_KEYS) + r'):', line)]
+        if size > chunk_size:
+            hashlist = g['name'] + '.hashes'
+            if hashlist in names:
+                print(f'* error: hashlist name {hashlist} clashes with a payload')
+                sys.exit(1)
+            digests = chunk_digests(path, chunk_size)
+            with open(os.path.join(tmpdir, hashlist), 'wb') as fh:
+                fh.write(digests)
+            out += [f'{item}- name: {hashlist}',
+                    f'{indent}type: hashlist',
+                    f'{indent}size: {len(digests)}',
+                    f'{indent}sha256: {hashlib.sha256(digests).hexdigest()}']
+            members.append(hashlist)
+            lines += [f'{indent}size: {size}',
+                      f'{indent}chunk_size: {chunk_size}']
+        else:
+            lines += [f'{indent}size: {size}',
+                      f'{indent}sha256: {file_sha256(path)}']
+        out += lines
+        members.append(g['name'])
+
+    return out, members
+
+def build_legacy_contents(contents, payloads_idx, groups, members):
+    """Return the lines of a _contents_.yaml for a transitional artefact.
+
+    This lets applicators which predate manifests install the artefact. The
+    manifest, hashlists and payloads of types they don't know are listed as
+    tmpfiles, because older applicators would try to flash any member which
+    isn't listed (or has an unknown type) to the slot of that name. payloads
+    is placed at the top level, which all versions accept."""
+    out = list(contents[:payloads_idx]) + ['payloads:']
+    by_name = {g['name']: g for g in groups}
+
+    for name in members:
+        g = by_name.get(name)
+        if g is None:
+            out += [f'- name: {name}',
+                    '  type: tmpfile']
+            continue
+        m = re.match(r'^(\s*)-', g['lines'][0])
+        item = m.group(1)
+        for line in g['lines']:
+            if line.startswith(item):
+                line = line[len(item):]
+            if PAYLOAD_TYPES.get(g['type']) != 1:
+                line = re.sub(r'^(\s*-?\s*type:\s*).*$', r'\1tmpfile', line)
+            out.append(line)
+
+    return out
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('contents',
-                        help='the YAML contents file')
+                        help='the YAML contents file',
+                        nargs='?')
     parser.add_argument('outfile',
                         help="the artefact name (defaults to the 'name' in the contents)",
                         nargs='?')
@@ -71,10 +256,56 @@ def main():
                              '(default: the current directory)',
                         metavar='DIR')
     parser.add_argument('-w', '--writesum',
-                        help='also write the sha256sum to <outfile>.sha256sum',
+                        help='also write the sha256sum to <outfile>.sha256sum (and for a transitional '
+                             'artefact, the manifest hash to <outfile>.manifest.sha256sum)',
                         action='store_true')
+    kind = parser.add_mutually_exclusive_group()
+    kind.add_argument('-t', '--transitional',
+                      help='build a transitional artefact, with a manifest and a legacy contents file '
+                           'for older applicators (the default)',
+                      action='store_true')
+    kind.add_argument('-m', '--manifest',
+                      help="build a manifest-only (format 2) artefact, published by the hash of its "
+                           "manifest, which older applicators can't install",
+                      action='store_true')
+    kind.add_argument('-l', '--legacy',
+                      help='build a legacy artefact, without a manifest',
+                      action='store_true')
+    parser.add_argument('-c', '--chunk-size',
+                        help=f'chunk size for large payloads in a manifest artefact (default {DEFAULT_CHUNK_SIZE // (1024 * 1024)}M)',
+                        type=parse_size, default=DEFAULT_CHUNK_SIZE)
+    parser.add_argument('-k', '--sign-key',
+                        help='sign the manifest with this ed25519 private key (PEM) - may be repeated',
+                        action='append', default=[])
+    parser.add_argument('-s', '--signature',
+                        help='add the signature line(s) in this file to the manifest signature - may be repeated',
+                        action='append', default=[])
+    parser.add_argument('-f', '--force',
+                        help='allow an unsupported manifest format, or payload types which need a manifest '
+                             'in a legacy or transitional artefact, e.g. to test applicators',
+                        action='store_true')
+    parser.add_argument('--signed-data',
+                        help='write the data to be signed to this file, and stop',
+                        metavar='FILE')
+    parser.add_argument('--print-pubkey',
+                        help='print the trusted keys line (and key id) for this key, and stop',
+                        metavar='KEY')
 
     args = parser.parse_args()
+    if args.print_pubkey:
+        pubkey = public_key(args.print_pubkey)
+        print(f'ed25519 {base64.b64encode(pubkey).decode()} {os.path.basename(args.print_pubkey)}')
+        print(f'Key id: {key_id(pubkey)}')
+        return
+    if not args.contents:
+        parser.error('the contents file is required')
+    signing = args.sign_key or args.signature or args.signed_data
+    if signing and args.legacy:
+        parser.error('only a manifest can be signed')
+    # Transitional artefacts include a manifest
+    if not (args.manifest or args.legacy):
+        args.transitional = True
+    args.manifest = not args.legacy
 
     try:
         with open(args.contents, 'r', encoding='utf-8', errors='replace') as fh:
@@ -91,8 +322,12 @@ def main():
     state = BLOCK_NONE
     contents = []
     payloads = [CONTENTS_FILE]
+    payloads_idx = None
     outfile = args.outfile
     errors = 0
+    manifest_format = FIRST_MANIFEST_FORMAT
+    requested_format = None
+    format_payload = None   # The payload which needs manifest_format, if any
     groups = []             # One per payload: name, type, source, comment
     item_prefix = None      # The '- ' of a list item whose first line was dropped
 
@@ -133,10 +368,23 @@ def main():
                 state = BLOCK_HEADER
             elif line.strip() == 'payloads:':
                 state = BLOCK_PAYLOADS
+                payloads_idx = len(contents) - 1
             elif state == BLOCK_HEADER:
                 name_m = re.match(r'^\s+name:\s*(.+)$', line)
                 if name_m and args.outfile is None:
                     outfile = name_m.group(1).strip()
+                secver_m = re.match(r'^\s+security_version:\s*(.*)$', line)
+                if secver_m and not re.match(r'^\d+$', secver_m.group(1).strip()):
+                    print(f"* error: security_version must be a non-negative integer")
+                    errors += 1
+                format_m = re.match(r'^\s+format:\s*(.*)$', line)
+                if format_m:
+                    fmt = format_m.group(1).strip()
+                    if not re.match(r'^\d+$', fmt):
+                        print(f"* error: format must be a non-negative integer")
+                        errors += 1
+                    else:
+                        requested_format = int(fmt)
             elif state == BLOCK_PAYLOADS:
                 # Normalise list item: '- name: x' -> '  name: x'
                 payload_line = re.sub(r'^\s*-\s*', '  ', line)
@@ -174,10 +422,17 @@ def main():
                 print(f"* error: payload '{name}' has no type")
                 errors += 1
                 continue
-            if ptype not in KNOWN_PAYLOAD_TYPES:
-                print(f"* error: payload '{name}' has unknown type '{ptype}' "
-                      f"(expected one of: {', '.join(KNOWN_PAYLOAD_TYPES)})")
-                errors += 1
+            if PAYLOAD_TYPES.get(ptype, 1) > manifest_format:
+                manifest_format = PAYLOAD_TYPES[ptype]
+                format_payload = name
+            if ptype not in PAYLOAD_TYPES:
+                # Applicators verify and then ignore manifest payloads of unknown
+                # type, but would flash a legacy one to the slot of that name
+                print(f"* {'error' if args.legacy else 'warning'}: payload '{name}' "
+                      f"has unknown type '{ptype}' "
+                      f"(expected one of: {', '.join(PAYLOAD_TYPES)})")
+                if args.legacy:
+                    errors += 1
             if ptype != "tmpfile" and target.endswith(COMPRESSED_SUFFIXES):
                 print(f"* warning: payload '{name}' file '{target}' looks pre-compressed; "
                       f"the artefact is already compressed as a whole, "
@@ -200,16 +455,99 @@ def main():
                         print(f"* error: payload {name}: cannot symlink '{target}'")
                         errors += 1
 
+        for g in groups:
+            # Names starting with '_' are reserved for members such as _manifest_.yaml
+            if g['name'] and g['name'].startswith('_'):
+                print(f"* error: payload {g['name']}: names starting with '_' are reserved")
+                errors += 1
+            if g['type'] == 'hashlist':
+                print(f"* error: payload {g['name']}: hashlists are generated by otamaker")
+                errors += 1
+            # Older applicators can only install format 1 types, and would skip or
+            # reject the others. -f allows them, e.g. to test applicators.
+            if PAYLOAD_TYPES.get(g['type'], 1) > 1 and (args.legacy or args.transitional):
+                print(f"* {'warning' if args.force else 'error'}: payload {g['name']}: "
+                      f"{g['type']} payloads need a manifest-only artefact (-m)")
+                if not args.force:
+                    errors += 1
+
+        # A legacy artefact has no manifest, so no format
+        if args.manifest:
+            if requested_format is not None:
+                # -f uses the requested format as given, e.g. a format too low for
+                # the contents, to test applicators
+                reason = f" for payload '{format_payload}'" if format_payload else ""
+                if requested_format >= manifest_format:
+                    manifest_format = requested_format
+                elif args.force:
+                    if format_payload:
+                        print(f"* warning: format {requested_format} is too low{reason}")
+                    manifest_format = requested_format
+                else:
+                    print(f"* warning: format {requested_format} raised to {manifest_format}{reason}")
+            if not FIRST_MANIFEST_FORMAT <= manifest_format <= MANIFEST_FORMAT:
+                print(f"* {'warning' if args.force else 'error'}: unsupported format {manifest_format}")
+                if not args.force:
+                    errors += 1
+
         if errors:
             sys.exit(1)
 
-        contents_path = os.path.join(tmpdir, CONTENTS_FILE)
+        contents_file = CONTENTS_FILE
+        legacy_contents = None
+        if args.manifest:
+            if payloads_idx is None or any(not g['name'] for g in groups):
+                print('* error: malformed payloads list')
+                sys.exit(1)
+            manifest, payloads = build_manifest(contents, payloads_idx, groups,
+                                                tmpdir, args.chunk_size, manifest_format)
+            if args.sign_key or args.signature:
+                # The signature immediately precedes the manifest
+                payloads = [SIGNATURE_FILE] + payloads
+            if args.transitional:
+                # The legacy contents come first, for older applicators
+                legacy_contents = build_legacy_contents(contents, payloads_idx, groups, payloads)
+                payloads = [CONTENTS_FILE] + payloads
+            contents = manifest
+            contents_file = MANIFEST_FILE
+
+        contents_path = os.path.join(tmpdir, contents_file)
         try:
             with open(contents_path, 'w', encoding='utf-8') as ofh:
                 ofh.write('\n'.join(contents) + '\n')
+            if legacy_contents:
+                with open(os.path.join(tmpdir, CONTENTS_FILE), 'w', encoding='utf-8') as ofh:
+                    ofh.write('\n'.join(legacy_contents) + '\n')
         except OSError:
             print('* failed to create new contents file')
             sys.exit(1)
+
+        if args.signed_data:
+            with open(contents_path, 'rb') as fh, open(args.signed_data, 'wb') as ofh:
+                ofh.write(SIGNATURE_DOMAIN + fh.read())
+            print(f'Signed data: {args.signed_data}')
+            return
+
+        if args.sign_key or args.signature:
+            sig_lines = [sign_manifest(key, contents_path) for key in args.sign_key]
+            for sigfile in args.signature:
+                try:
+                    with open(sigfile, 'r', encoding='utf-8') as fh:
+                        sig_lines += [line.strip() for line in fh
+                                      if line.strip() and not line.startswith('#')]
+                except OSError:
+                    print(f"* failed to open '{sigfile}'")
+                    sys.exit(1)
+            for line in sig_lines:
+                if not re.match(r'^ed25519 [0-9a-f]{16} [A-Za-z0-9+/]{86}==$', line):
+                    print(f"* error: malformed signature line '{line}'")
+                    sys.exit(1)
+            sig_text = '\n'.join(sig_lines) + '\n'
+            if len(sig_text) > MAX_SIGNATURE_FILE_SIZE:
+                print('* error: too many signatures')
+                sys.exit(1)
+            with open(os.path.join(tmpdir, SIGNATURE_FILE), 'w', encoding='utf-8') as ofh:
+                ofh.write(sig_text)
 
         if not outfile:
             print("* error: no output name (set 'name' in artefact header or pass as argument)")
@@ -225,20 +563,29 @@ def main():
         if r.returncode != 0:
             sys.exit(r.returncode)
 
-        proc = subprocess.Popen(['sha256sum', outfile], stdout=subprocess.PIPE)
-        line = proc.stdout.readline().decode().strip()
-        sum = line[:64]
+        # A manifest artefact is published by the hash of its manifest. A
+        # transitional artefact is published by both: the hash of the whole
+        # artefact for older applicators, and the manifest hash for newer ones.
+        sum = file_sha256(contents_path if args.manifest else outfile)
+        legacy_sum = file_sha256(outfile) if args.transitional else None
         if args.writesum:
-            sum_path = f'{outfile}.sha256sum'
-            with open(sum_path, 'w') as sf:
-                print(sum, file=sf)
+            if legacy_sum:
+                with open(f'{outfile}.sha256sum', 'w') as sf:
+                    print(legacy_sum, file=sf)
+                with open(f'{outfile}.manifest.sha256sum', 'w') as sf:
+                    print(sum, file=sf)
+            else:
+                with open(f'{outfile}.sha256sum', 'w') as sf:
+                    print(sum, file=sf)
 
         print('Contents:')
         for payload in payloads:
             print(f'  {payload}')
         print()
         print(f'Artefact: {outfile}')
-        print(f'SHA256:   {sum}')
+        if legacy_sum:
+            print(f'SHA256:   {legacy_sum} (whole artefact)')
+        print(f"SHA256:   {sum}{' (manifest)' if args.manifest else ''}")
 
 if __name__ == '__main__':
     main()

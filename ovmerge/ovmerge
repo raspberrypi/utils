@@ -31,6 +31,7 @@
 # Python port of the Perl ovmerge tool. CLI wrapper - the DT tokeniser,
 # parser, and merge/apply engine live in ovmerge_engine.py.
 
+import argparse
 import re
 import sys
 
@@ -46,72 +47,81 @@ from ovmerge_engine import (
 # Main
 # ---------------------------------------------------------------------------
 
-def usage():
-    w = sys.stderr.write
-    w("Usage: ovmerge <options> <ovspec>\n")
-    w("  where <ovspec> is the name of an overlay, optionally followed by\n")
-    w("    a comma-separated list of parameters, each with optional '=<value>'\n")
-    w("    assignments. The presence of any parameters, or a comma followed by\n")
-    w("    no parameters, removes the parameter declarations from the merged\n")
-    w("    overlay to avoid a potential name clash.\n")
-    w("  and <options> are any of:\n")
-    w("    -b <branch>  Read files from specified git branch\n")
-    w("    -B <token numer>  Set a debug breakpoint on the specified token number\n")
-    w("    -c      Include 'redo' comment with command line (c.f. '-r')\n")
-    w("    -e      Expand mode - list non-skipped lines in order of inclusion\n")
-    w("    -f      Force some errors to be ignored\n")
-    w("    -h      Display this help info\n")
-    w("    -i      Show include hierarchy for each file\n")
-    w("    -l      Like expand mode, but labels each line with source file\n")
-    w("    -n      No .dts file header (just parsing .dtsi files)\n")
-    w("    -N      Don't renumber overlay fragments (not guaranteed to work)\n")
-    w("    -p      Emulate Pi firmware manipulation\n")
-    w("    -q      Query mode (no output, just the success/failure return code)\n")
-    w("    -r      Redo command comment in named files (c.f. '-c')\n")
-    w("    -s      Sort nodes and properties (for easy comparison)\n")
-    w("    -S <n>  Instead of tabs, use 'n' spaces for indentation\n")
-    w("    -t      Trace the tree changes\n")
-    w("    -T      Trace the parsing process\n")
-    w("    -w      Show warnings\n")
-    sys.exit(1)
+class RedoAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        cmdline = getattr(namespace, 'cmdline', [])
+        cmdline.append(option_string)
+        cmdline.extend(values if isinstance(values, list) else [values])
+        setattr(namespace, 'cmdline', cmdline)
+        setattr(namespace, self.dest, True if self.nargs == 0 else values)
 
 
 def run(argv):
-    args = list(argv)
+    parser = argparse.ArgumentParser(
+        description="Merge DT overlay source files, flatten and sort .dts files, "
+                    "or display the include tree.",
+        argument_default=argparse.SUPPRESS,
+    )
+    parser.add_argument('-b', dest='branch', action=RedoAction, metavar='branch',
+                        help="Read files from specified git branch")
+    parser.add_argument('-B', dest='bkpt', type=int, metavar='token',
+                        help="Set a debug breakpoint on the specified token number")
+    parser.add_argument('-c', dest='comment', action='store_true',
+                        help="Include 'redo' comment with command line (c.f. '-r')")
+    parser.add_argument('-e', dest='expand', action='store_true',
+                        help="Expand mode - list non-skipped lines in order of inclusion")
+    parser.add_argument('-f', dest='force', action='store_true',
+                        help="Force some errors to be ignored")
+    parser.add_argument('-i', dest='show_includes', action='store_true',
+                        help="Show include hierarchy for each file")
+    parser.add_argument('-l', dest='expand_label', action='store_true',
+                        help="Like expand mode, but labels each line with source file")
+    parser.add_argument('-n', dest='no_dts', action='store_true',
+                        help="No .dts file header (just parsing .dtsi files)")
+    parser.add_argument('-N', dest='no_renumber', action='store_true',
+                        help="Don't renumber overlay fragments (not guaranteed to work)")
+    parser.add_argument('-p', dest='pi_extras', action=RedoAction, nargs=0,
+                        help="Emulate Pi firmware manipulation")
+    parser.add_argument('-q', dest='query', action='store_true',
+                        help="Query mode (no output, just the success/failure return code)")
+    parser.add_argument('-r', dest='redo', action='store_true',
+                        help="Redo command comment in named files (c.f. '-c')")
+    parser.add_argument('-s', dest='sort', action=RedoAction, nargs=0,
+                        help="Sort nodes and properties (for easy comparison)")
+    parser.add_argument('-S', dest='indent_spaces', action=RedoAction, metavar='n',
+                        help="Instead of tabs, use 'n' spaces for indentation")
+    parser.add_argument('-t', dest='trace_tree', action='store_true',
+                        help="Trace the tree changes")
+    parser.add_argument('-T', dest='trace_parse', action='store_true',
+                        help="Trace the parsing process")
+    parser.add_argument('-w', dest='warnings', action='store_true',
+                        help="Show warnings")
+    parser.add_argument('overlays', nargs='*', metavar='ovspec',
+                        help="The name of an overlay, optionally followed by a comma-separated "
+                             "list of parameters, each with optional '=<value>' assignments. The "
+                             "presence of any parameters, or a comma followed by no parameters, "
+                             "removes the parameter declarations from the merged overlay to avoid "
+                             "a potential name clash.")
+
     cmdline = []
     redo_comments = []
-
-    while args and args[0].startswith('-') and args[0] != '-':
-        arg = args.pop(0)
-
-        if arg == '-b':
-            if not args:
-                print("* Branch parameter missing", file=sys.stderr)
-                usage()
-            S.branch = args.pop(0)
-            cmdline += [arg, S.branch]
-        elif arg == '-B':
-            if not args:
-                print("* Breakpoint number missing", file=sys.stderr)
-                usage()
-            S.bkpt = int(args.pop(0))
-        elif arg == '-c':
-            S.comment = True
-        elif arg == '-e':
+    while True:
+        options = vars(parser.parse_args(argv))
+        cmdline.extend(options.pop('cmdline', []))
+        args = options.pop('overlays', [])
+        redo = options.pop('redo', False)
+        indent_spaces = options.pop('indent_spaces', None)
+        if indent_spaces is not None:
+            if not re.fullmatch(r'\d+', indent_spaces):
+                parser.error("argument -S: expected a non-negative integer")
+            indent_spaces = int(indent_spaces)
+            S.indent_str = ' ' * indent_spaces
+        for name, value in options.items():
+            setattr(S, name, value)
+        if S.expand_label:
             S.expand = True
-        elif arg == '-h':
-            usage()
-        elif arg == '-i':
-            S.show_includes = True
-        elif arg == '-l':
-            S.expand = True
-            S.expand_label = True
-        elif arg == '-n':
-            S.no_dts = True
-        elif arg == '-p':
-            S.pi_extras = True
-            cmdline.append(arg)
-        elif arg == '-r':
+
+        if redo:
             if args:
                 lines = open_source_lines(args[0])
             else:
@@ -120,45 +130,18 @@ def run(argv):
             firstline = next(it, '')
             m = re.match(r'^// redo: ovmerge (.*)', firstline)
             if not m:
-                print("* Redo but input has no 'redo:' comment", file=sys.stderr)
-                usage()
-            args = re.split(r'\s+', m.group(1).strip())
+                parser.error("Redo but input has no 'redo:' comment")
+            argv = re.split(r'\s+', m.group(1).strip())
             for line in it:
                 line = line.rstrip('\n')
                 if re.match(r'^/dts-v1/', line):
                     break
                 redo_comments.append(line)
-        elif arg == '-s':
-            S.sort = True
-            cmdline.append(arg)
-        elif arg == '-t':
-            S.trace_tree = True
-        elif arg == '-T':
-            S.trace_parse = True
-        elif arg == '-w':
-            S.warnings = True
-        elif arg == '-q':
-            S.query = True
-        elif arg == '-f':
-            S.force = True
-        elif arg == '-N':
-            S.no_renumber = True
-        elif arg == '-S':
-            if not args:
-                print("* Spaces count parameter missing", file=sys.stderr)
-                usage()
-            indent_spaces = args.pop(0)
-            if not re.fullmatch(r'\d+', indent_spaces):
-                print("* Invalid spaces count parameter. Expected an integer.", file=sys.stderr)
-                usage()
-            S.indent_str = ' ' * int(indent_spaces)
-            cmdline += [arg, indent_spaces]
         else:
-            print(f"* Unknown option '{arg}'", file=sys.stderr)
-            usage()
+            break
 
     if not args:
-        usage()
+        parser.error("At least one ovspec is required")
 
     cmdline += args
 

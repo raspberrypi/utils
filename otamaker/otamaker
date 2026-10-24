@@ -163,7 +163,7 @@ def main():
             outfile += '.tar.zst'
 
         tar_cmd = [
-            'tar', '--zstd', '-h', '-cvf', outfile, '-C', tmpdir
+            'tar', '--zstd', '-h', '--hard-dereference', '-cvf', outfile, '-C', tmpdir
         ] + payloads
         r = subprocess.run(tar_cmd, capture_output=True)
         if r.returncode != 0:

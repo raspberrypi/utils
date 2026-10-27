@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+#
+# Reads the PMIC EVT status register via vcgencmd and reports any
+# error events that are currently latched (RW1C bits).
+#
+# Usage: ./rpipmic
+
+set -euo pipefail
+
+REG_ADDR="0x3018"
+
+# bit -> "NAME:description" for the EVT register at REG_ADDR
+EVENTS=(
+    "0:EVT_PB_SHORT_PRESS: short press on the power button was detected"
+    "1:EVT_OVERTEMP_WARN: over-temperature warning"
+    "2:EVT_OVERTEMP_RESET: over-temperature reset occurred"
+    "3:EVT_WDT_RESET: watchdog timer timed out"
+    "4:EVT_ENABLE_LOW: chip reset/halt caused by a low on the ENABLE pin"
+    "5:EVT_UVLO_WARN: supply voltage fell below the warning threshold"
+    "6:EVT_UVLO_SHUT: last shutdown was caused by supply voltage falling below the critical threshold"
+    "7:EVT_VDD_SNS_OV: over-voltage detected on the VDD_SNS pin"
+)
+
+if ! command -v vcgencmd >/dev/null 2>&1; then
+    echo "error: vcgencmd not found (this script must run on a Raspberry Pi)" >&2
+    exit 1
+fi
+
+raw_output=$(vcgencmd pmicrd "$REG_ADDR")
+
+# expected form: "[3018] = 00"
+hex_value=$(echo "$raw_output" | awk -F'=' '{print $2}' | tr -d '[:space:]')
+hex_value=${hex_value#0x}
+
+if [[ -z "$hex_value" || ! "$hex_value" =~ ^[0-9a-fA-F]+$ ]]; then
+    echo "error: could not parse vcgencmd output: '$raw_output'" >&2
+    exit 1
+fi
+
+reg_value=$((16#$hex_value))
+
+echo "PMIC EVT register ($REG_ADDR) = 0x$(printf '%02x' "$reg_value")"
+
+error_found=0
+for entry in "${EVENTS[@]}"; do
+    bit="${entry%%:*}"
+    rest="${entry#*:}"
+    name="${rest%%:*}"
+    desc="${rest#*:}"
+
+    if (( (reg_value >> bit) & 1 )); then
+        echo "  [ERROR] $name -$desc"
+        error_found=1
+    fi
+done
+
+if (( error_found == 0 )); then
+    echo "  No error events detected."
+fi
+
+exit "$error_found"

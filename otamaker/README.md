@@ -61,10 +61,12 @@ artefact:
   payloads:
   - name: preinstall
     type: script
-  - name: boot          # boot.sparse
+  - name: boot
     type: image-sparse
-  - name: system        # system.sparse
+    source: boot.sparse
+  - name: system
     type: image-sparse
+    source: system.sparse
   - name: installdata.tgz
     type: tmpfile
   - name: installer
@@ -87,7 +89,7 @@ The following payload types are recognised:
 * `script` - a program to execute on the remote device. As the name suggests, this is expected to be a script of some description, but it doesn't have to be.
 * `tmpfile` - some other file to be copied to the device for the duration of the update. These are intended to be used by scripts, which they must appear before in the list of payloads in order to be accessible.
 
-Comments immediately after (and on the same line as) the `name` field are interpreted by otamaker as a path to the source file. These comments are removed when the final archive is created.
+Each payload is read from the file named by its `source` field, or from the file with the same name as the payload if there is no `source`. Paths are relative to the current directory, unless `-C <dir>` (`--directory`) gives another, as for `tar`. `source` is a build-time field: otamaker removes it from the copy of the contents in the archive. An older form, a comment immediately after (and on the same line as) the `name` field, is still accepted as the path when there is no `source`; such comments are also removed.
 
 **Scripts**
 
@@ -167,12 +169,14 @@ artefact:
   device_type: rpi
 
   payloads:
-  - name: boot          # work/image-myapp-1.0.3/boot.sparse
+  - name: boot
     type: image-sparse
-  - name: system        # work/image-myapp-1.0.3/system.sparse
+    source: work/image-myapp-1.0.3/boot.sparse
+  - name: system
     type: image-sparse
+    source: work/image-myapp-1.0.3/system.sparse
 ```
-This artefact YAML file is designed to be used from root of the rpi-image-gen repository - you could also drop the paths, keeping `boot.sparse` and `system.sparse`, and run `otamaker` from within the `work/image-myapp-1.0.3` directory (or your equivalent). Here's the output it generated:
+This artefact YAML file is designed to be used from root of the rpi-image-gen repository - you could also drop the paths, keeping `boot.sparse` and `system.sparse`, and either run `otamaker` from within the `work/image-myapp-1.0.3` directory (or your equivalent) or point it there with `-C`. Here's the output it generated:
 ```
 pi@philpi5:~/rpi-image-gen $ otamaker abupdate.yaml 
 Contents:

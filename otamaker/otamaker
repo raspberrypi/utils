@@ -2,6 +2,11 @@
 """
 Build an OTA artefact from a contents YAML file.
 Usage: otamaker [<options>] <contents file> [<outfile>]
+
+Each payload is read from the file named by its 'source:' key, or by a comment
+on its 'name:' line (the older form), or failing both by its name. Paths are
+relative to the current directory, or to -C <dir>. 'source:'
+is dropped from the copy of the contents in the artefact.
 """
 
 # Author: Phil Elwell <phil@raspberrypi.com>
@@ -61,6 +66,10 @@ def main():
     parser.add_argument('outfile',
                         help="the artefact name (defaults to the 'name' in the contents)",
                         nargs='?')
+    parser.add_argument('-C', '--directory',
+                        help='the directory payload paths are relative to '
+                             '(default: the current directory)',
+                        metavar='DIR')
     parser.add_argument('-w', '--writesum',
                         help='also write the sha256sum to <outfile>.sha256sum',
                         action='store_true')
@@ -74,13 +83,18 @@ def main():
         print(f"* failed to open '{args.contents}'")
         sys.exit(1)
 
-    cwd = os.getcwd()
+    basedir = args.directory if args.directory is not None else os.getcwd()
+    basedir = os.path.abspath(basedir)
+    if not os.path.isdir(basedir):
+        print(f"* error: directory '{basedir}' not found")
+        sys.exit(1)
     state = BLOCK_NONE
     contents = []
     payloads = [CONTENTS_FILE]
     outfile = args.outfile
     errors = 0
-    current_payload = {}
+    groups = []             # One per payload: name, type, source, comment
+    item_prefix = None      # The '- ' of a list item whose first line was dropped
 
     with tempfile.TemporaryDirectory() as tmpdir:
         for raw_line in lines:
@@ -91,6 +105,24 @@ def main():
                 if m:
                     line = m.group(1)
                     comment = m.group(2).strip()
+
+            if state == BLOCK_PAYLOADS:
+                # A payload's file is given by a 'source:' key, which otamaker
+                # drops from the embedded copy, or else by a comment on the
+                # 'name:' line (the older form), or else it's the name itself.
+                payload_line = re.sub(r'^\s*-\s*', '  ', line)
+                source_m = re.match(r'^\s+source:\s*(.*)$', payload_line)
+                if source_m and (groups or re.match(r'^\s*-', line)):
+                    if re.match(r'^\s*-', line):
+                        groups.append({'name': None, 'type': None, 'lines': [],
+                                       'source': None, 'comment': None})
+                        item_prefix = re.match(r'^\s*-\s*', line).group(0)
+                    groups[-1]['source'] = source_m.group(1).strip()
+                    continue
+                if item_prefix is not None and line.strip():
+                    # Move the '- ' to the first line which is kept
+                    line = item_prefix + line.lstrip()
+                    item_prefix = None
 
             contents.append(line)
 
@@ -108,41 +140,65 @@ def main():
             elif state == BLOCK_PAYLOADS:
                 # Normalise list item: '- name: x' -> '  name: x'
                 payload_line = re.sub(r'^\s*-\s*', '  ', line)
-                name_m = re.match(r'^\s+name:\s*(.+)$', payload_line)
-                type_m = re.match(r'^\s+type:\s*(.+)$', payload_line)
-                if name_m:
-                    name = name_m.group(1).strip()
-                    target = (comment if comment is not None else name).strip()
-                    current_payload = {'name': name, 'target': target}
-                    src = os.path.join(cwd, target)
-                    dst = os.path.join(tmpdir, name)
-                    if not os.path.isfile(src) and not os.path.islink(src) and not os.path.isdir(src):
-                        if not os.path.exists(src):
-                            print(f'* error: file {target} not found')
-                            errors += 1
+                if re.match(r'^\s*-', line) and not (groups and groups[-1]['lines'] == []):
+                    groups.append({'name': None, 'type': None, 'lines': [],
+                                   'source': None, 'comment': None})
+                if groups:
+                    groups[-1]['lines'].append(line)
+                    type_m = re.match(r'^\s+type:\s*(.+)$', payload_line)
+                    if type_m:
+                        groups[-1]['type'] = type_m.group(1).strip()
+                    name_m = re.match(r'^\s+name:\s*(.+)$', payload_line)
+                    if name_m:
+                        groups[-1]['name'] = name_m.group(1).strip()
+                        groups[-1]['comment'] = comment
+
+        for g in groups:
+            name = g['name']
+            if name is None:
+                print("* error: payload has no name")
+                errors += 1
+                continue
+            if g['source'] is not None:
+                target = g['source']
+            elif g['comment'] is not None:
+                target = g['comment']
+            else:
+                target = name
+            if not target:
+                print(f"* error: payload {name}: empty source")
+                errors += 1
+                continue
+            ptype = g['type']
+            if ptype is None:
+                print(f"* error: payload '{name}' has no type")
+                errors += 1
+                continue
+            if ptype not in KNOWN_PAYLOAD_TYPES:
+                print(f"* error: payload '{name}' has unknown type '{ptype}' "
+                      f"(expected one of: {', '.join(KNOWN_PAYLOAD_TYPES)})")
+                errors += 1
+            if ptype != "tmpfile" and target.endswith(COMPRESSED_SUFFIXES):
+                print(f"* warning: payload '{name}' file '{target}' looks pre-compressed; "
+                      f"the artefact is already compressed as a whole, "
+                      f"did you mean '{re.sub(r'(?:'+'|'.join(re.escape(s) for s in COMPRESSED_SUFFIXES)+r')$', '', target)}'?")
+            src = os.path.join(basedir, target)
+            dst = os.path.join(tmpdir, name)
+            if not os.path.isfile(src) and not os.path.islink(src) and not os.path.isdir(src):
+                if not os.path.exists(src):
+                    print(f"* error: payload {name}: file '{target}' not found in {basedir}")
+                    errors += 1
+            else:
+                try:
+                    os.symlink(src, dst)
+                    payloads.append(name)
+                except OSError:
+                    if os.path.isfile(src):
+                        shutil.copy2(src, dst)
+                        payloads.append(name)
                     else:
-                        try:
-                            os.symlink(src, dst)
-                            payloads.append(name)
-                        except OSError:
-                            if os.path.isfile(src):
-                                shutil.copy2(src, dst)
-                                payloads.append(name)
-                            else:
-                                print(f'* error: cannot symlink {target}')
-                                errors += 1
-                elif type_m:
-                    ptype = type_m.group(1).strip()
-                    pname = current_payload.get('name', '?')
-                    target = current_payload.get('target', pname)
-                    if ptype not in KNOWN_PAYLOAD_TYPES:
-                        print(f"* error: payload '{pname}' has unknown type '{ptype}' "
-                              f"(expected one of: {', '.join(KNOWN_PAYLOAD_TYPES)})")
+                        print(f"* error: payload {name}: cannot symlink '{target}'")
                         errors += 1
-                    if ptype != "tmpfile" and target.endswith(COMPRESSED_SUFFIXES):
-                        print(f"* warning: payload '{pname}' file '{target}' looks pre-compressed; "
-                              f"the artefact is already compressed as a whole, "
-                              f"did you mean '{re.sub(r'(?:'+'|'.join(re.escape(s) for s in COMPRESSED_SUFFIXES)+r')$', '', target)}'?")
 
         if errors:
             sys.exit(1)

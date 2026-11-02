@@ -676,6 +676,68 @@ static void rp1_smc_set_sideset_pins(PIO, pio_sm_config *config, uint sideset_ba
                  (sideset_base << PROC_PIO_SM0_PINCTRL_SIDESET_BASE_LSB);
 }
 
+static void rp1_smc_set_out_pin_base(PIO, pio_sm_config *config, uint out_base)
+{
+    smc_to_rp1(config, c);
+    valid_params_if(PIO, out_base < RP1_PIO_GPIO_COUNT);
+    c->pinctrl = (c->pinctrl & ~PROC_PIO_SM0_PINCTRL_OUT_BASE_BITS) |
+                 (out_base << PROC_PIO_SM0_PINCTRL_OUT_BASE_LSB);
+}
+
+static void rp1_smc_set_out_pin_count(PIO, pio_sm_config *config, uint out_count)
+{
+    smc_to_rp1(config, c);
+    valid_params_if(PIO, out_count <= RP1_PIO_GPIO_COUNT);
+    c->pinctrl = (c->pinctrl & ~PROC_PIO_SM0_PINCTRL_OUT_COUNT_BITS) |
+                 (out_count << PROC_PIO_SM0_PINCTRL_OUT_COUNT_LSB);
+}
+
+static void rp1_smc_set_set_pin_base(PIO, pio_sm_config *config, uint set_base)
+{
+    smc_to_rp1(config, c);
+    valid_params_if(PIO, set_base < RP1_PIO_GPIO_COUNT);
+    c->pinctrl = (c->pinctrl & ~PROC_PIO_SM0_PINCTRL_SET_BASE_BITS) |
+                 (set_base << PROC_PIO_SM0_PINCTRL_SET_BASE_LSB);
+}
+
+static void rp1_smc_set_set_pin_count(PIO, pio_sm_config *config, uint set_count)
+{
+    smc_to_rp1(config, c);
+    valid_params_if(PIO, set_count <= 5);
+    c->pinctrl = (c->pinctrl & ~PROC_PIO_SM0_PINCTRL_SET_COUNT_BITS) |
+                 (set_count << PROC_PIO_SM0_PINCTRL_SET_COUNT_LSB);
+}
+
+static void rp1_smc_set_in_pin_base(PIO, pio_sm_config *config, uint in_base)
+{
+    smc_to_rp1(config, c);
+    valid_params_if(PIO, in_base < RP1_PIO_GPIO_COUNT);
+    c->pinctrl = (c->pinctrl & ~PROC_PIO_SM0_PINCTRL_IN_BASE_BITS) |
+                 (in_base << PROC_PIO_SM0_PINCTRL_IN_BASE_LSB);
+}
+
+static void rp1_smc_set_in_pin_count(PIO, __unused pio_sm_config *config, __unused uint in_count)
+{
+    /* RP1 PIO has no IN_COUNT field - the count is fixed at 32 */
+    valid_params_if(PIO, in_count == 32);
+}
+
+static void rp1_smc_set_sideset_pin_base(PIO, pio_sm_config *config, uint sideset_base)
+{
+    smc_to_rp1(config, c);
+    valid_params_if(PIO, sideset_base < RP1_PIO_GPIO_COUNT);
+    c->pinctrl = (c->pinctrl & ~PROC_PIO_SM0_PINCTRL_SIDESET_BASE_BITS) |
+                 (sideset_base << PROC_PIO_SM0_PINCTRL_SIDESET_BASE_LSB);
+}
+
+static void rp1_smc_set_sideset_pin_count(PIO, pio_sm_config *config, uint sideset_count)
+{
+    smc_to_rp1(config, c);
+    valid_params_if(PIO, sideset_count <= 5);
+    c->pinctrl = (c->pinctrl & ~PROC_PIO_SM0_PINCTRL_SIDESET_COUNT_BITS) |
+                 (sideset_count << PROC_PIO_SM0_PINCTRL_SIDESET_COUNT_LSB);
+}
+
 static void rp1_smc_set_sideset(PIO, pio_sm_config *config, uint bit_count, bool optional, bool pindirs)
 {
     smc_to_rp1(config, c);
@@ -1082,6 +1144,16 @@ DECLARE_PIO_CHIP(rp1) {
     .smc_set_fifo_join = rp1_smc_set_fifo_join,
     .smc_set_out_special = rp1_smc_set_out_special,
     .smc_set_mov_status = rp1_smc_set_mov_status,
+
+    /* Additions for V2 SDK */
+    .smc_set_out_pin_base = rp1_smc_set_out_pin_base,
+    .smc_set_out_pin_count = rp1_smc_set_out_pin_count,
+    .smc_set_set_pin_base = rp1_smc_set_set_pin_base,
+    .smc_set_set_pin_count = rp1_smc_set_set_pin_count,
+    .smc_set_in_pin_base = rp1_smc_set_in_pin_base,
+    .smc_set_in_pin_count = rp1_smc_set_in_pin_count,
+    .smc_set_sideset_pin_base = rp1_smc_set_sideset_pin_base,
+    .smc_set_sideset_pin_count = rp1_smc_set_sideset_pin_count,
 
     .clock_get_hz = rp1_clock_get_hz,
 

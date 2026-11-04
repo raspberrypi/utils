@@ -89,3 +89,8 @@ add_executable(txsink txsink.c)
 target_include_directories(txsink PRIVATE ../include)
 target_link_libraries(txsink pio)
 install(TARGETS txsink RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+add_executable(blink blink.c)
+target_include_directories(blink PRIVATE ../include)
+target_link_libraries(blink pio)
+install(TARGETS blink RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

@@ -1,0 +1,9 @@
+.program blink
+
+.side_set  1
+.out 1 auto
+
+.wrap_target
+    out pins 1  side 0          // output lsb each clock
+    nop         side 1          // raise clock
+.wrap

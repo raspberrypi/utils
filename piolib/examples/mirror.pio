@@ -1,0 +1,8 @@
+.program mirror
+
+// Copy the levels of the IN pins to the OUT pins, once per clock cycle.
+// The IN base and OUT base/count are set by the host at run time.
+
+.wrap_target
+    mov pins, pins
+.wrap

@@ -94,3 +94,8 @@ add_executable(blink blink.c)
 target_include_directories(blink PRIVATE ../include)
 target_link_libraries(blink pio)
 install(TARGETS blink RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+add_executable(mirror mirror.c)
+target_include_directories(mirror PRIVATE ../include)
+target_link_libraries(mirror pio)
+install(TARGETS mirror RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.1...3.27)
 
 project(utils)
 
+include(CTest)
+
 option(ENABLE_WERROR "Treat compiler warnings as errors" OFF)
 
 # List of subsidiary CMakeLists
@@ -16,6 +18,7 @@ add_subdirectory(ovmerge)
 add_subdirectory(pinctrl)
 add_subdirectory(piolib)
 add_subdirectory(raspinfo)
+add_subdirectory(rp1-ptp-pps)
 add_subdirectory(rpieepromab)
 add_subdirectory(rpi-gpu-usage)
 add_subdirectory(vcgencmd)

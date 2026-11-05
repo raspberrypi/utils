@@ -27,6 +27,7 @@ A collection of scripts and simple applications
 * [rpifwcrypto](rpifwcrypto/) - A command line application and shared library for the
     firmware cryptography service. Intended for use with Raspberry Pi Connect and
     secure-boot provisioner.
+* [rpipmic](rpipmic/) - A command line utility to report any stored PMIC events.
 * [rpi-gpu-usage](rpi-gpu-usage/) - A tool for showing the per-process usage of the V3D GPU
     on Raspberry Pi 4 and 5.
 * [splashasm](splashasm/) - A tool for writing spi & i2c dumps for fast display at boot

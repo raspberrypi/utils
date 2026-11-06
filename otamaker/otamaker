@@ -6,7 +6,8 @@ Usage: otamaker [<options>] <contents file> [<outfile>]
 Each payload is read from the file named by its 'source:' key, or by a comment
 on its 'name:' line (the older form), or failing both by its name. Paths are
 relative to the current directory, or to -C <dir>. 'source:'
-is dropped from the copy of the contents in the artefact.
+is dropped from the copy of the contents in the artefact. If SOURCE_DATE_EPOCH
+is set in the environment, the archive members are given that mtime.
 
 -t builds a transitional artefact, which applicators can install either as a
 manifest (format 2) artefact or, if they predate manifests, as a legacy
@@ -99,6 +100,16 @@ PAYLOAD_TYPES = {
 # individually-compressed payload (e.g. 'boot.sparse.zst' instead of
 # 'boot.sparse') is almost always a mistake.
 COMPRESSED_SUFFIXES = ('.zst', '.gz', '.bz2', '.xz', '.lz4', '.tgz', '.tzst')
+MAX_NAME_LEN = 100      # The tar header name field, as the applicator limits it
+
+def is_simple_name(name):
+    """A payload name identifies the archive member (and perhaps a slot), so
+    must be a simple name rather than a path: no '/', not '.' or '..', no
+    control characters, and short enough for a tar header. The file it is
+    built from ('source:', a comment, or failing both the name) is separate."""
+    if not name or len(name) > MAX_NAME_LEN or name in ('.', '..'):
+        return False
+    return not any(c == '/' or ord(c) < 0x20 or ord(c) == 0x7f for c in name)
 
 def parse_size(text):
     m = re.match(r'^(\d+)([KkMm]?)$', text)
@@ -196,6 +207,9 @@ def build_manifest(contents, payloads_idx, groups, tmpdir, chunk_size, manifest_
             hashlist = g['name'] + '.hashes'
             if hashlist in names:
                 print(f'* error: hashlist name {hashlist} clashes with a payload')
+                sys.exit(1)
+            if len(hashlist) > MAX_NAME_LEN:
+                print(f'* error: hashlist name {hashlist} is too long')
                 sys.exit(1)
             digests = chunk_digests(path, chunk_size)
             with open(os.path.join(tmpdir, hashlist), 'wb') as fh:
@@ -401,12 +415,22 @@ def main():
                         groups[-1]['name'] = name_m.group(1).strip()
                         groups[-1]['comment'] = comment
 
+        seen_names = set()
         for g in groups:
             name = g['name']
             if name is None:
                 print("* error: payload has no name")
                 errors += 1
                 continue
+            if not is_simple_name(name):
+                print(f"* error: payload name '{name}' is not a simple name (no '/', '.' or '..')")
+                errors += 1
+                continue
+            if name in seen_names:
+                print(f"* error: duplicate payload name '{name}'")
+                errors += 1
+                continue
+            seen_names.add(name)
             if g['source'] is not None:
                 target = g['source']
             elif g['comment'] is not None:
@@ -558,7 +582,16 @@ def main():
 
         tar_cmd = [
             'tar', '--zstd', '-h', '--hard-dereference', '-cvf', outfile, '-C', tmpdir
-        ] + payloads
+        ]
+        # Honour the reproducible-builds convention: with SOURCE_DATE_EPOCH set,
+        # every member is given that mtime instead of the time it was copied
+        sde = os.environ.get('SOURCE_DATE_EPOCH')
+        if sde is not None:
+            if not re.fullmatch(r'\d+', sde.strip()):
+                print(f"* error: SOURCE_DATE_EPOCH '{sde}' is not an integer")
+                sys.exit(1)
+            tar_cmd.append(f'--mtime=@{sde.strip()}')
+        tar_cmd += payloads
         r = subprocess.run(tar_cmd, capture_output=True)
         if r.returncode != 0:
             sys.exit(r.returncode)

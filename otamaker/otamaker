@@ -270,8 +270,9 @@ def main():
                              '(default: the current directory)',
                         metavar='DIR')
     parser.add_argument('-w', '--writesum',
-                        help='also write the sha256sum to <outfile>.sha256sum (and for a transitional '
-                             'artefact, the manifest hash to <outfile>.manifest.sha256sum)',
+                        help='also write the manifest hash to <outfile>.manifest.sha256sum, and (for '
+                             'a legacy or transitional artefact) the hash of the whole artefact to '
+                             '<outfile>.sha256sum',
                         action='store_true')
     kind = parser.add_mutually_exclusive_group()
     kind.add_argument('-t', '--transitional',
@@ -602,13 +603,17 @@ def main():
         sum = file_sha256(contents_path if args.manifest else outfile)
         legacy_sum = file_sha256(outfile) if args.transitional else None
         if args.writesum:
-            if legacy_sum:
+            # The manifest hash always goes to <outfile>.manifest.sha256sum,
+            # whichever kind of artefact it is in, and the hash of the whole
+            # artefact to <outfile>.sha256sum.
+            if args.legacy:
                 with open(f'{outfile}.sha256sum', 'w') as sf:
-                    print(legacy_sum, file=sf)
-                with open(f'{outfile}.manifest.sha256sum', 'w') as sf:
                     print(sum, file=sf)
             else:
-                with open(f'{outfile}.sha256sum', 'w') as sf:
+                if legacy_sum:
+                    with open(f'{outfile}.sha256sum', 'w') as sf:
+                        print(legacy_sum, file=sf)
+                with open(f'{outfile}.manifest.sha256sum', 'w') as sf:
                     print(sum, file=sf)
 
         print('Contents:')

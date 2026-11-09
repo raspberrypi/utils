@@ -30,9 +30,10 @@ options:
   -C DIR, --directory DIR
                         the directory payload paths are relative to (default:
                         the current directory)
-  -w, --writesum        also write the sha256sum to <outfile>.sha256sum (and
-                        for a transitional artefact, the manifest hash to
-                        <outfile>.manifest.sha256sum)
+  -w, --writesum        also write the manifest hash to
+                        <outfile>.manifest.sha256sum, and (for a legacy or
+                        transitional artefact) the hash of the whole artefact
+                        to <outfile>.sha256sum
   -t, --transitional    build a transitional artefact, with a manifest and a
                         legacy contents file for older applicators (the
                         default)
@@ -138,9 +139,9 @@ otamaker can build three kinds of artefact, chosen with one of `-t`, `-m` and `-
 
 With `-m` or `-t`, otamaker adds `size` and `sha256` fields to each payload in the manifest. Payloads larger than the chunk size (`-c`, default 4M, up to 64M) are instead hashed one chunk at a time, with the per-chunk digests in an extra `<name>.hashes` payload placed before them, so that the applicator can check a large image as it is written. The manifest gets a `format` field, currently always 2; a `format` in the contents file asks for at least that version, and `-f` (`--force`) allows an unsupported one, e.g. to test applicators. Don't put `size`, `sha256` or `chunk_size` in the contents file yourself.
 
-`-w` (`--writesum`) writes the published hash to `<outfile>.sha256sum`. For a transitional artefact it writes the whole-archive hash there, and the manifest hash to `<outfile>.manifest.sha256sum`.
+`-w` (`--writesum`) writes the whole-archive hash to `<outfile>.sha256sum` in legacy and transitional modes, and the manifest hash to `<outfile>.manifest.sha256sum` in manifest and transitional modes.
 
-Note that the manifest hash doesn't change between builds from the same contents and payloads, unlike the whole-archive hash, which depends on timestamps.
+Note that the manifest hash doesn't change between builds from the same contents and payloads, unlike the whole-archive hash, which depends on timestamps. However, if SOURCE_DATE_EPOCH is set in the environment, the archive members are given that mtime, resulting in consistent whole-archive hashes when run by the same user provided the payloads don't change.
 
 **Signing**
 

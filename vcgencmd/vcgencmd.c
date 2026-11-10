@@ -110,7 +110,7 @@ static unsigned gencmd(int file_desc, const char *command, char *result, int res
 
    mbox_property(file_desc, p);
    result[0] = 0;
-   strncat(result, (const char *)(p+6), result_len);
+   strncat(result, (const char *)(p+6), result_len - 1);
 
    return p[5];
 }

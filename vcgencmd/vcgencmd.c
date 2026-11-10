@@ -98,7 +98,7 @@ static unsigned gencmd(int file_desc, const char *command, char *result, int res
    p[i++] = 0x00000000; // process request
 
    p[i++] = GET_GENCMD_RESULT; // (the tag id)
-   p[i++] = MAX_STRING;// buffer_len
+   p[i++] = MAX_STRING + 4; // buffer_len: response word + command/result
    p[i++] = 0; // request_len (set to response length)
    p[i++] = 0; // error repsonse
 

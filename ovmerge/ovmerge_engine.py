@@ -210,6 +210,8 @@ class _ExprParser:
         return self.tokens[self.i] if self.i < len(self.tokens) else None
 
     def take(self):
+        if self.i >= len(self.tokens):
+            raise OvMergeError("* Incomplete expression")
         t = self.tokens[self.i]
         self.i += 1
         return t
@@ -297,6 +299,155 @@ def eval_expr(s):
     if not tokens:
         raise OvMergeError(f"* Bad integer value '{s}'")
     return _ExprParser(tokens).parse()
+
+
+# Preprocessor ('#if') expressions: C integer expressions extended with
+# comparison and logical operators, 'defined' and macro expansion.
+
+_PP_TOKEN_RE = re.compile(
+    r"\s*(0[xX][0-9a-fA-F]+[uUlL]*|0[bB][01]+[uUlL]*|[0-9]+[uUlL]*"
+    r"|[A-Za-z_]\w*|<<|>>|<=|>=|==|!=|&&|\|\||[()+\-*/%&|^~!<>])")
+_IDENT_RE = re.compile(r'^[A-Za-z_]\w*$')
+
+
+def _tokenize_pp_expr(s):
+    tokens = []
+    i = 0
+    n = len(s)
+    while i < n:
+        m = _PP_TOKEN_RE.match(s, i)
+        if not m:
+            if s[i:].strip() == '':
+                break
+            raise OvMergeError(f"* Bad #if expression '{s.strip()}'")
+        tok = m.group(1)
+        if tok[0].isdigit():
+            tok = re.sub(r'[uUlL]+$', '', tok)
+        tokens.append(tok)
+        i = m.end()
+    return tokens
+
+
+class _PPExprParser(_ExprParser):
+    def __init__(self, tokens, defines, expanding):
+        super().__init__(tokens)
+        self.defines = defines
+        self.expanding = expanding
+        self.skip = 0  # >0 while evaluating a short-circuited operand
+
+    def parse(self):
+        if not self.tokens:
+            raise OvMergeError("* #if with no expression")
+        v = self.parse_lor()
+        if self.i != len(self.tokens):
+            raise OvMergeError(f"* Unexpected '{self.peek()}' in #if expression")
+        return v
+
+    def parse_lor(self):
+        v = self.parse_land()
+        while self.peek() == '||':
+            self.take()
+            self.skip += bool(v)
+            r = self.parse_land()
+            self.skip -= bool(v)
+            v = int(bool(v) or bool(r))
+        return v
+
+    def parse_land(self):
+        v = self.parse_or()
+        while self.peek() == '&&':
+            self.take()
+            self.skip += not v
+            r = self.parse_or()
+            self.skip -= not v
+            v = int(bool(v) and bool(r))
+        return v
+
+    def parse_and(self):
+        v = self.parse_eq()
+        while self.peek() == '&':
+            self.take()
+            v = v & self.parse_eq()
+        return v
+
+    def parse_eq(self):
+        v = self.parse_rel()
+        while self.peek() in ('==', '!='):
+            op = self.take()
+            r = self.parse_rel()
+            v = int(v == r) if op == '==' else int(v != r)
+        return v
+
+    def parse_rel(self):
+        v = self.parse_shift()
+        while self.peek() in ('<', '>', '<=', '>='):
+            op = self.take()
+            r = self.parse_shift()
+            if op == '<':
+                v = int(v < r)
+            elif op == '>':
+                v = int(v > r)
+            elif op == '<=':
+                v = int(v <= r)
+            else:
+                v = int(v >= r)
+        return v
+
+    def parse_mul(self):
+        v = self.parse_unary()
+        while self.peek() in ('*', '/', '%'):
+            op = self.take()
+            r = self.parse_unary()
+            if op == '*':
+                v = v * r
+            elif r == 0:
+                if not self.skip:
+                    raise OvMergeError("* Division by zero in #if expression")
+                v = 0
+            elif op == '/':
+                v = _c_div(v, r)
+            else:
+                v = _c_mod(v, r)
+        return v
+
+    def parse_unary(self):
+        if self.peek() == '!':
+            self.take()
+            return int(not self.parse_unary())
+        return super().parse_unary()
+
+    def parse_primary(self):
+        t = self.peek()
+        if t == 'defined':
+            self.take()
+            paren = self.peek() == '('
+            if paren:
+                self.take()
+            name = self.take()
+            if not _IDENT_RE.match(name):
+                raise OvMergeError("* 'defined' requires a macro name")
+            if paren and self.take() != ')':
+                raise OvMergeError("* Missing ')' after 'defined'")
+            return int(name in self.defines)
+        if t is not None and _IDENT_RE.match(t):
+            self.take()
+            if self.peek() == '(':
+                raise OvMergeError(f"* Function-like macro '{t}' not supported in #if expression")
+            val = self.defines.get(t)
+            if val is None or t in self.expanding:
+                # Undefined (or recursive) identifiers evaluate to 0, as in cpp
+                return 0
+            if val.strip() == '':
+                raise OvMergeError(f"* '{t}' is defined with no value")
+            return eval_pp_expr(val, self.defines, self.expanding | {t})
+        return super().parse_primary()
+
+
+def eval_pp_expr(s, defines, expanding=frozenset()):
+    s = re.sub(r'/\*.*?\*/', ' ', s)
+    s = re.sub(r'//.*', '', s)
+    tokens = _tokenize_pp_expr(s)
+    return _PPExprParser(tokens, defines, expanding).parse()
 
 
 def integer_value(value, size):
@@ -1243,7 +1394,8 @@ def dump_node(node, depth, out):
 # Tokenizer
 # ---------------------------------------------------------------------------
 
-_IF_RE = re.compile(r'^\s*#if(def|ndef)?\s+(\w+)')
+_IF_RE = re.compile(r'^\s*#if(def|ndef)?(?!\w)\s*(.*?)\s*$')
+_ELIF_RE = re.compile(r'^\s*#elif(?!\w)\s*(.*?)\s*$')
 _ELSE_RE = re.compile(r'^\s*#else')
 _ENDIF_RE = re.compile(r'^\s*#endif')
 _INCLUDE_RE = re.compile(r'^\s*(?:#include|/include/)\s+(["<][^">]+[">])\s*$')
@@ -1296,12 +1448,19 @@ def open_source_lines(filename):
             raise OvMergeError(f"* Failed to open '{filename}'")
 
 
+def eval_if_expr(expr, defines, filename, linenum):
+    try:
+        return eval_pp_expr(expr, defines)
+    except OvMergeError as e:
+        raise OvMergeError(f"{e} ({filename}:{linenum})")
+
+
 def read_tokens(filename, depth, defines):
     linenum = 0
     tokens = [FileMarker(filename)]
     in_comment = False
-    if_count = 0
-    hidden_count = 0
+    # Each entry is [parent_active, branch_taken, active]
+    cond_stack = []
     expr = None
     expr_level = 0
     filepath = re.sub(r'/?[^/]*$', '', filename)
@@ -1330,29 +1489,46 @@ def read_tokens(filename, depth, defines):
         m = _IF_RE.match(line)
         if m:
             mode = m.group(1)
-            defined = m.group(2) in defines
-            if_count += 1
-            if hidden_count or not mode or (mode == 'def' and not defined) or \
-                    (mode == 'ndef' and defined):
-                hidden_count += 1
+            parent_active = not cond_stack or cond_stack[-1][2]
+            val = False
+            if parent_active:
+                if mode:
+                    m2 = re.match(r'^(\w+)', m.group(2))
+                    if not m2:
+                        raise OvMergeError(f"* #if{mode} requires a macro name ({filename}:{linenum})")
+                    val = (m2.group(1) in defines) == (mode == 'def')
+                else:
+                    val = eval_if_expr(m.group(2), defines, filename, linenum) != 0
+            cond_stack.append([parent_active, val, parent_active and val])
+            continue
+
+        m = _ELIF_RE.match(line)
+        if m:
+            if not cond_stack:
+                raise OvMergeError(f"* #elif without #if ({filename}:{linenum})")
+            state = cond_stack[-1]
+            if state[0] and not state[1]:
+                val = eval_if_expr(m.group(1), defines, filename, linenum) != 0
+                state[1] = state[2] = val
+            else:
+                state[2] = False
             continue
 
         if _ELSE_RE.match(line):
-            if hidden_count == 0:
-                hidden_count = 1
-            elif hidden_count == 1:
-                hidden_count = 0
+            if not cond_stack:
+                raise OvMergeError(f"* #else without #if ({filename}:{linenum})")
+            state = cond_stack[-1]
+            state[2] = state[0] and not state[1]
+            state[1] = True
             continue
 
         if _ENDIF_RE.match(line):
-            if if_count == 0:
+            if not cond_stack:
                 raise OvMergeError(f"* Unmatched #endif ({filename}:{linenum})")
-            if_count -= 1
-            if hidden_count:
-                hidden_count -= 1
+            cond_stack.pop()
             continue
 
-        if hidden_count:
+        if cond_stack and not cond_stack[-1][2]:
             continue
 
         m = _INCLUDE_RE.match(line)
@@ -1470,6 +1646,9 @@ def read_tokens(filename, depth, defines):
         rest = line[pos:]
         if not re.fullmatch(r'[\r\n]*', rest):
             raise OvMergeError(f"* Bad token at '{rest}'")
+
+    if cond_stack:
+        raise OvMergeError(f"* Unterminated #if at end of '{filename}'")
 
     if S.expand and not S.expand_label:
         print(f"#### End of '{filename}'")

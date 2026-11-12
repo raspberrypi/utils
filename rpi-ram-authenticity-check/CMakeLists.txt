@@ -1,7 +1,0 @@
-cmake_minimum_required(VERSION 3.10...3.27)
-
-include(GNUInstallDirs)
-
-project(rpi-ram-authenticity-check)
-
-install(PROGRAMS rpi-ram-authenticity-check DESTINATION ${CMAKE_INSTALL_BINDIR})

@@ -235,15 +235,15 @@ cat /proc/cpuinfo | tail -3
 
 echo "Throttled flag  : "`vcgencmd get_throttled`
 
-if grep -q bcm2712 /proc/device-tree/compatible 2>/dev/null; then
+if grep -q -e bcm2711 -e bcm2712 /proc/device-tree/compatible 2>/dev/null; then
    echo
-   echo "RAM authenticity"
-   echo "----------------"
+   echo "Manufacturing information"
+   echo "-------------------------"
    echo
-   if command -v rpi-ram-authenticity-check > /dev/null; then
-      rpi-ram-authenticity-check 2>&1 || :
+   if command -v rpi-manufacture-info > /dev/null; then
+      rpi-manufacture-info 2>&1 || :
    else
-      echo "rpi-ram-authenticity-check not found"
+      echo "rpi-manufacture-info not found"
    fi
    echo
 fi

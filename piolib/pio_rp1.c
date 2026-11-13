@@ -247,16 +247,20 @@ static uint rp1_pio_encode_nop(PIO)
 static int rp1_ioctl(PIO pio, int request, void *args)
 {
     RP1_PIO rp = (RP1_PIO)pio;
-    int err = ioctl(rp->fd, request, args);
-    switch (err) {
-    case -EREMOTEIO:
-    case -ETIMEDOUT:
-        pio_panic("Error communicating with RP1");
-        break;
-    default:
-        break;
+    int ret = ioctl(rp->fd, request, args);
+
+    if (ret < 0) {
+        ret = -errno;
+        switch (ret) {
+        case -EREMOTEIO:
+        case -ETIMEDOUT:
+            pio_panic("Error communicating with RP1");
+            break;
+        default:
+            break;
+        }
     }
-    return err;
+    return ret;
 }
 
 static int rp1_pio_sm_config_xfer(PIO pio, uint sm, uint dir, uint buf_size, uint buf_count)
@@ -311,13 +315,16 @@ static bool rp1_pio_can_add_program_at_offset(PIO pio, const pio_program_t *prog
 static uint rp1_pio_add_program_at_offset(PIO pio, const pio_program_t *program, uint offset)
 {
     struct rp1_pio_add_program_args args = { .num_instrs = program->length, .origin = program->origin };
+    int ret;
+
     valid_params_if(PIO, offset < RP1_PIO_INSTRUCTION_COUNT || offset == PIO_ORIGIN_ANY);
     valid_params_if(PIO, program->length <= RP1_PIO_INSTRUCTION_COUNT);
     valid_params_if(PIO, offset + program->length <= RP1_PIO_INSTRUCTION_COUNT || offset == PIO_ORIGIN_ANY);
     if (offset != PIO_ORIGIN_ANY)
         args.origin = offset;
     memcpy(args.instrs, program->instructions, program->length * sizeof(uint16_t));
-    return rp1_ioctl(pio, PIO_IOC_ADD_PROGRAM, &args);
+    ret = rp1_ioctl(pio, PIO_IOC_ADD_PROGRAM, &args);
+    return (ret < 0) ? PIO_ORIGIN_INVALID : (uint)ret;
 }
 
 static bool rp1_pio_remove_program(PIO pio, const pio_program_t *program, uint offset)

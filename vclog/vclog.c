@@ -118,7 +118,7 @@ int32_t main(int32_t argc, char *argv[])
     uint32_t logs_start_vc = 0;
     uint32_t logs_size = 0;
     char *payload_buffer = NULL;
-    size_t payload_buffer_size = 0;
+    uint32_t payload_buffer_size = 0;
     uint32_t log_id;
     uint32_t log_addr;
     uint32_t log_size;
@@ -197,7 +197,7 @@ int32_t main(int32_t argc, char *argv[])
             payload_pos = log_copy_wrap(log_buffer, log_size,
                                         read_pos, sizeof(msg), (char *)&msg);
             payload_len = msg.size - sizeof(msg_hdr_t);
-            if (payload_len > log_size)
+            if (msg.size < sizeof(msg_hdr_t) || payload_len > log_size)
             {
                 DLOG("log corrupt 1\n");
                 corrupt_retries++;

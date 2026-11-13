@@ -34,6 +34,13 @@ def ParseCommandLine():
 
     return parser.parse_args()
 
+def is_bcm2712():
+    try:
+        with open('/proc/device-tree/compatible', 'rb') as f:
+            return b'bcm2712' in f.read()
+    except OSError:
+        return False
+
 def ReadOTP(args):
 
     # Map key is actually the value from the docs, so we do need to subtract/add the legacy_offset from it where necessary. 
@@ -62,21 +69,36 @@ def ReadOTP(args):
     if args.fake: 
         result = b'08:00000000\n09:00000000\n10:00000000\n11:00000000\n12:00000000\n13:00000000\n14:00000000\n15:00000000\n16:00280000\n17:000008b0\n18:000008b0\n19:ffffffff\n20:ffffffff\n21:ffffffff\n22:ffffffff\n23:ffffffff\n24:ffffffff\n25:ffffffff\n26:ffffffff\n27:00005d5d\n28:58d2eb5c\n29:a72d14a3\n30:00c03111\n31:00000000\n32:00000000\n33:00000000\n34:00000000\n35:00000000\n36:00000000\n37:00000000\n38:00000000\n39:00000000\n40:00000000\n41:00000000\n42:00000000\n43:00000000\n44:00000000\n45:00000000\n46:00000000\n47:00000000\n48:00000000\n49:00000000\n50:00000000\n51:00000000\n52:00000000\n53:00000000\n54:00000000\n55:00000000\n56:00000000\n57:00000000\n58:00000000\n59:00000000\n60:00000000\n61:00000000\n62:00000000\n63:00000000\n64:00650000\n65:00000000\n66:00000000\n'
     else:
+        if args.customer:
+            # The customer rows are not at a fixed place in otp_dump on every
+            # SoC (BCM2712 starts the dump at row 0 and uses a different
+            # layout), so ask the firmware for them directly
+            customer = subprocess.check_output(['vcmailbox', '0x00030021', '40', '40', '0', '8'] + ['0'] * 8).split()
+            for i, val in enumerate(customer[7:15]):
+                val = int(val, base=16)
+                print(i, "0x{:08x} b'{:032b}".format(val, val))
+            return
+
         result = subprocess.check_output(['vcgencmd', 'otp_dump'])
 
-    result = result.split(b"\n")
+    # The row numbers above only describe the BCM2711 and earlier layout
+    if not args.fake and is_bcm2712():
+        row_info = {}
 
-    result.pop() # don't need the last entry, it's fluff
-
-    for i, val in enumerate(result):
-        result[i] = int(val[3:], base=16)
+    # Each line is "<row>:<value>"; rows are not contiguous and can have three digits
+    for line in result.splitlines():
+        row, sep, val = line.partition(b":")
+        if not sep:
+            continue
+        row = int(row)
+        val = int(val, base=16)
 
         if args.customer:
-            if i >= customer_otp_offset - legacy_offset and i < 44 - legacy_offset:
-                print(i - (customer_otp_offset - legacy_offset), "0x{:08x} b'{:032b}".format(result[i], result[i]))
+            if row >= customer_otp_offset and row < customer_otp_offset + 8:
+                print(row - customer_otp_offset, "0x{:08x} b'{:032b}".format(val, val))
         else :
-            print(i + legacy_offset, "0x{:08x} b'{:032b}  {}".format(result[i], result[i], row_info.get(i + legacy_offset, "")))
-    
+            print(row, "0x{:08x} b'{:032b}  {}".format(val, val, row_info.get(row, "")))
+
 
 def WriteOTP(args):
 

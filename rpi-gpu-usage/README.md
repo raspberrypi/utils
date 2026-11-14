@@ -35,7 +35,7 @@ Client  PID     Process         render     tfu     bin     csd   clean     CPU
 
 **Command line options**
 
- * `--csv`   Output in CSV format. This can just be cat'ed to a file for analysis
+ * `--csv`   Output in CSV format. This can just be `cat`ed to a file for analysis
 
 
 **Build Instructions**

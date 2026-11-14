@@ -1,8 +1,7 @@
-
 # rpi-gpu-usage
 
-rpi-gpu-usage is a simple tool for showing the per-process usage of the V3D
-GPU on Raspberry Pi 4 and 5.  It works by parsing the /proc/\*/fdinfo/\* 
+`rpi-gpu-usage` is a simple tool for showing the per-process usage of the V3D
+GPU on Raspberry Pi 4 and 5.  It works by parsing the `/proc/*/fdinfo/*`
 information to find the processes that have drm stats information like:
 
 ```
@@ -21,7 +20,7 @@ information to find the processes that have drm stats information like:
 /proc/2390/fdinfo/23:drm-purgeable-memory:    0
 ```
 
-The application then outputs total GPU usage for the renderer (shaders)
+The application then outputs total GPU usage for the renderer (shaders),
 tfu (texture format unit), binning, csd (compute shader dispatch) and
 cache_clean blocks.  It also reads the total CPU usage for that process.
 
@@ -36,14 +35,13 @@ Client  PID     Process         render     tfu     bin     csd   clean     CPU
 
 **Command line options**
 
- * --csv   Output in CSV format. This can just be cat'ed to a file for analysis
+ * `--csv`   Output in CSV format. This can just be cat'ed to a file for analysis
 
 
 **Build Instructions**
 
-Install the prerequisites with "sudo apt install cmake libncurses-dev" - you need at least version 3.10 of cmake. Run the following commands, either here or in the top-level directory to build and install everything:
+Install the prerequisites with `sudo apt install cmake libncurses-dev` - you need at least version 3.10 of cmake. Run the following commands, either here or in the top-level directory, to build and install everything:
 
- - *cmake .*
- - *make*
- - *sudo make install*
-
+ - `cmake .`
+ - `make`
+ - `sudo make install`

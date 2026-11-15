@@ -255,8 +255,8 @@ static void usage(const char *prog)
 {
     fprintf(stderr,
             "Usage: %s [options]\n\n"
-            "Monitor VideoCore VII GPU block utilisation on "
-            "Raspberry Pi 5/500.\n\n"
+            "Monitor VideoCore GPU block utilisation on "
+            "Raspberry Pi 4 and 5 family devices.\n\n"
             "  --csv   Output in CSV format (pipe to file)\n"
             "  --help  Show this help message\n",
             prog);

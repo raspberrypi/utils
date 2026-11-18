@@ -163,12 +163,18 @@ int pio_init(void)
     num_irqs = 0;
 
     p = start;
-    while (p < end)
+    while (p < end && num_instances < PIO_MAX_INSTANCES)
     {
         PIO_CHIP_T *chip = *p;
         PIO pio = chip->create_instance(chip, i);
         if (pio && !PIO_IS_ERR(pio)) {
-            int irq_count = chip->irq_count;
+            uint irq_count = chip->irq_count;
+            /* Stay within the per-instance and global IRQ tables */
+            if (irq_count > NUM_PIO_IRQS)
+                irq_count = NUM_PIO_IRQS;
+            if (num_irqs + irq_count > PIO_MAX_IRQS)
+                irq_count = 0;
+            pio->irq_count = 0;
             if (irq_count) {
                 pio->irq_base = num_irqs;
                 pio->irq_count = irq_count;
@@ -260,7 +266,7 @@ PIO pio_open_by_name(const char *name)
 
 PIO pio_open_helper(uint idx)
 {
-    PIO pio = pio_instances[idx];
+    PIO pio = (idx < PIO_MAX_INSTANCES) ? pio_instances[idx] : NULL;
     if (!pio || !pio->in_use) {
         pio = pio_open(idx);
         if (PIO_IS_ERR(pio)) {
@@ -300,10 +306,14 @@ void sleep_us(uint64_t us)
 uint pio_irq_map(PIO pio, uint irq_index) {
     int pirq;
     check_pio_param(pio);
-    invalid_params_if(PIO, irq_index > pio->irq_count);
+    /* This indexes an array, so it has to be a real check */
+    if (irq_index >= pio->irq_count)
+        pio_panic("irq index out of range");
     pirq = pio->irqs[irq_index];
     if (pirq < 0) {
         pirq = pio->chip->pio_irq_claim(pio);
+        if (pirq >= (int)pio->irq_count)
+            pirq = -1;
         if (pirq >= 0) {
             pio->irqs[irq_index] = pirq;
         }

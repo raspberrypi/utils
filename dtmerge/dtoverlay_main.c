@@ -33,6 +33,8 @@ modification, are permitted provided that the following conditions are met:
 #include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <sys/file.h>
 
 #include <libfdt.h>
 
@@ -49,6 +51,11 @@ modification, are permitted provided that the following conditions are met:
 #define DT_OVERLAYS_SUBDIR "overlays"
 #define DTOVERLAY_PATH_MAX 128
 #define DIR_MODE 0755
+#define LOCK_FILE "lock"
+#define LOCK_POLL_MS 50
+#define LOCK_TIMEOUT_MS 30000
+/* Set in the environment of the dtoverlay-pre/post hooks */
+#define HOOK_ENV "DTOVERLAY_IN_HOOK"
 
 
 enum {
@@ -89,6 +96,7 @@ static int dtoverlay_list_all(STATE_T *state);
 static void usage(void);
 static void root_check(void);
 static int check_work_dir(const char *dir, int create);
+static void lock_state(int exclusive);
 
 static void overlay_help(const char *overlay, const char **params);
 
@@ -107,6 +115,7 @@ const char *error_file = NULL;
 const char *platform_string;
 int platform_string_len;
 int dry_run = 0;
+static int lock_fd = -1;
 
 char cell_source_loc[DTOVERLAY_MAX_PATH];
 int cell_source_loc_len;
@@ -122,6 +131,8 @@ int main(int argc, const char **argv)
     STATE_T *state = NULL;
     const char *cfg_dir;
     int have_work_dir = 1;
+    int modifying;
+    int in_hook;
 
     cmd_name = argv[0];
     if (strrchr(cmd_name, '/'))
@@ -221,6 +232,16 @@ int main(int argc, const char **argv)
 
     dtoverlay_enable_debug(opt_verbose);
 
+    modifying = !dry_run && ((opt == OPT_ADD) || (opt == OPT_REMOVE) ||
+                             (opt == OPT_REMOVE_FROM));
+    in_hook = (getenv(HOOK_ENV) != NULL);
+
+    /* The hooks run while the state is locked, so any attempt to change it
+       from a hook would deadlock (and risks infinite recursion) */
+    if (modifying && in_hook)
+        fatal_error("%s can't add or remove overlays from a dtoverlay-pre or "
+                    "dtoverlay-post hook", cmd_name);
+
     if (!overlay_src_dir)
     {
         /* Find the overlays and README */
@@ -253,11 +274,20 @@ int main(int argc, const char **argv)
         goto orderly_exit;
     }
 
+    if (modifying)
+        root_check();
+
     if (!dry_run)
     {
         /* Only root may create the state directory. Others can still list
            the active overlays if it exists. */
         have_work_dir = check_work_dir(work_dir, getuid() == 0);
+
+        /* Serialise against other instances, holding the lock until exit.
+           A hook runs while its parent holds the lock exclusively, so the
+           state can't change under it and it must not wait for the lock. */
+        if (have_work_dir && !in_hook)
+            lock_state(modifying);
     }
 
     error_file = sprintf_dup("%s/%s", work_dir, "error.dtb");
@@ -305,7 +335,7 @@ int main(int argc, const char **argv)
     case OPT_REMOVE_FROM:
         if (!dry_run)
         {
-            root_check();
+            setenv(HOOK_ENV, "1", 1);
             run_cmd("which dtoverlay-pre >/dev/null 2>&1 && dtoverlay-pre");
         }
         break;
@@ -1155,6 +1185,51 @@ static int check_work_dir(const char *dir, int create)
                     dir);
 
     return 1;
+}
+
+/* Take a shared or exclusive lock on the state. It is released when the
+   process exits, however that happens. */
+static void lock_state(int exclusive)
+{
+    int op = (exclusive ? LOCK_EX : LOCK_SH) | LOCK_NB;
+    int waited_ms = 0;
+
+    if (lock_fd < 0)
+    {
+        const char *lock_path = sprintf_dup("%s/%s", work_dir, LOCK_FILE);
+
+        if (getuid() == 0)
+            lock_fd = open(lock_path, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW,
+                           0644);
+        else
+            lock_fd = open(lock_path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+
+        if (lock_fd < 0)
+        {
+            /* Root has never modified the state, so there is nothing to
+               protect */
+            if ((errno == ENOENT) && (getuid() != 0))
+                return;
+            fatal_error("Failed to open '%s' - %s", lock_path,
+                        strerror(errno));
+        }
+        free_string(lock_path);
+    }
+
+    while (flock(lock_fd, op) != 0)
+    {
+        if (errno == EINTR)
+            continue;
+        if (errno != EWOULDBLOCK)
+            fatal_error("Failed to lock '%s' - %s", work_dir, strerror(errno));
+        if (waited_ms == 0)
+            dtoverlay_debug("waiting for another instance to finish");
+        if (waited_ms >= LOCK_TIMEOUT_MS)
+            fatal_error("Timed out waiting for another dtoverlay or dtparam "
+                        "to finish");
+        usleep(LOCK_POLL_MS * 1000);
+        waited_ms += LOCK_POLL_MS;
+    }
 }
 
 static void overlay_help(const char *overlay, const char **params)

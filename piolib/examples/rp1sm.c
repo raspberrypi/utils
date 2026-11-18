@@ -47,7 +47,7 @@ int main(int argc, const char **argv)
     if (argc > 2)
         usage();
 
-    fd = open(devname, O_RDWR, O_CLOEXEC);
+    fd = open(devname, O_RDWR | O_CLOEXEC);
     if (fd < 0)
         return -errno;
 

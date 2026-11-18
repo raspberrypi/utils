@@ -1040,7 +1040,7 @@ static int rp1_open_instance(PIO pio)
     RP1_PIO rp = (RP1_PIO)pio;
     int fd;
 
-    fd = open(rp->devname, O_RDWR, O_CLOEXEC);
+    fd = open(rp->devname, O_RDWR | O_CLOEXEC);
     if (fd < 0)
         return -errno;
     rp->fd = fd;

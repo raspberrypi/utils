@@ -105,6 +105,7 @@ static void overlay_help(const char *overlay, const char **params);
 
 static int apply_overlay(const char *overlay_file, const char *overlay);
 static int save_dtb_atomic(DTBLOB_T *dtb, const char *filename);
+static void discard_overlay_file(const char *filename);
 static int overlay_applied(const char *overlay_dir);
 
 static STATE_T *read_state(const char *dir);
@@ -827,13 +828,7 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
 
     if (!dry_run && !apply_overlay(overlay_file, overlay_name))
     {
-        if (error_file)
-        {
-            /* Keep the failed overlay, and don't delete it on exit */
-            rename(overlay_file, error_file);
-            free_string(error_file);
-            error_file = NULL;
-        }
+        discard_overlay_file(overlay_file);
         return 1;
     }
 
@@ -847,6 +842,7 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
     char *end;
     int overlay_len;
     int count = state->count;
+    int failed = 0;
     int rmpos;
     int i;
 
@@ -960,6 +956,7 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
                     if (!dtb)
                     {
                         error("Failed to re-apply dtparam");
+                        failed++;
                         continue;
                     }
 
@@ -968,6 +965,7 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
                     {
                         error("Failed to re-apply dtparam");
                         dtoverlay_free_dtb(dtb);
+                        failed++;
                         continue;
                     }
 
@@ -988,6 +986,7 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
                     {
                         error("out of memory re-applying dtparam");
                         dtoverlay_free_dtb(dtb);
+                        failed++;
                         continue;
                     }
 
@@ -998,7 +997,8 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
                     }
                     paramv[j] = NULL;
 
-                    /* Create the new overlay */
+                    /* Create the new overlay. If it can't be applied, the
+                       file is discarded. */
                     ret = dtoverlay_add(state, "dtparam", paramc, paramv);
                     free(paramv);
                     dtoverlay_free_dtb(dtb);
@@ -1007,10 +1007,18 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
                 {
                     rename(filename, new_file);
                     ret = !apply_overlay(new_file, new_name);
+                    if (ret != 0)
+                        discard_overlay_file(new_file);
                 }
+                free_string(new_file);
+                free_string(new_name);
                 if (ret != 0)
                 {
-                    error("Failed to re-apply dtparam");
+                    /* Its file has gone, so the next overlay takes its
+                       number */
+                    error("Failed to re-apply '%.*s' - it is no longer loaded",
+                          len, left);
+                    failed++;
                     continue;
                 }
                 state->count++;
@@ -1018,7 +1026,7 @@ static int dtoverlay_remove(STATE_T *state, const char *overlay, int and_later)
         }
     }
 
-    return 0;
+    return failed ? 1 : 0;
 }
 
 static int dtoverlay_list(STATE_T *state)
@@ -1426,6 +1434,23 @@ static int save_dtb_atomic(DTBLOB_T *dtb, const char *filename)
     free_string(tmp_file);
 
     return err;
+}
+
+/* Remove the file of an overlay that failed to apply from the sequence.
+   The first failure is kept as error.dtb for diagnosis. */
+static void discard_overlay_file(const char *filename)
+{
+    if (error_file)
+    {
+        rename(filename, error_file);
+        free_string(error_file);
+        /* Don't delete it on exit */
+        error_file = NULL;
+    }
+    else
+    {
+        unlink(filename);
+    }
 }
 
 static int overlay_applied(const char *overlay_dir)

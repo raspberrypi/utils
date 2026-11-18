@@ -35,15 +35,16 @@ modification, are permitted provided that the following conditions are met:
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/mount.h>
 
 #include <libfdt.h>
 
 #include "dtoverlay.h"
 #include "utils.h"
 
-
-#define CFG_DIR_1 "/sys/kernel/config"
-#define CFG_DIR_2 "/config"
+#define CFG_DIR "/sys/kernel/config"
+/* Where to mount configfs if it isn't at CFG_DIR (relative to WORK_DIR) */
+#define CFG_MOUNT_SUBDIR "configfs"
 #define DT_SUBDIR "/device-tree"
 #define WORK_DIR "/run/dtoverlays"
 #define OVERLAY_SRC_SUBDIR "overlays"
@@ -293,9 +294,14 @@ int main(int argc, const char **argv)
 
     error_file = sprintf_dup("%s/%s", work_dir, "error.dtb");
 
-    cfg_dir = CFG_DIR_1 DT_SUBDIR;
+    cfg_dir = CFG_DIR DT_SUBDIR;
     if (!dry_run && !dir_exists(cfg_dir))
     {
+        /* configfs isn't mounted in the usual place, so mount it in the
+           state directory, which is on a tmpfs */
+        const char *mount_dir = sprintf_dup("%s/%s", work_dir,
+                                            CFG_MOUNT_SUBDIR);
+
         root_check();
 
         /* Only one instance may mount configfs. Listing only holds a shared
@@ -303,14 +309,23 @@ int main(int argc, const char **argv)
         if (!modifying && !in_hook)
             lock_state(1);
 
-        cfg_dir = CFG_DIR_2;
-        if ((mkdir(cfg_dir, DIR_MODE) != 0) && (errno != EEXIST))
-            fatal_error("Failed to create '%s' - %s", cfg_dir, strerror(errno));
-
-        cfg_dir = CFG_DIR_2 DT_SUBDIR;
-        if (!dir_exists(cfg_dir) &&
-            (run_cmd("mount -t configfs none '%s'", cfg_dir) != 0))
-            fatal_error("Failed to mount configfs - %d", errno);
+        cfg_dir = sprintf_dup("%s%s", mount_dir, DT_SUBDIR);
+        if (!dir_exists(cfg_dir))
+        {
+            if ((mkdir(mount_dir, DIR_MODE) != 0) && (errno != EEXIST))
+                fatal_error("Failed to create '%s' - %s", mount_dir,
+                            strerror(errno));
+            if (mount("configfs", mount_dir, "configfs",
+                      MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL) != 0)
+                fatal_error("Failed to mount configfs on '%s' - %s",
+                            mount_dir, strerror(errno));
+            if (!dir_exists(cfg_dir))
+            {
+                umount(mount_dir);
+                fatal_error("configfs has no '%s' folder - incompatible kernel",
+                            DT_SUBDIR + 1);
+            }
+        }
     }
 
     if (!platform_string)

@@ -83,9 +83,6 @@ typedef struct rp1_pio_handle {
     struct pio_instance base;
     const char *devname;
     int fd;
-    bool irq_thread_running;
-    pthread_mutex_t lock;
-    pthread_t irq_thread;
 } *RP1_PIO;
 
 #define smc_to_rp1(_config, _c) rp1_pio_sm_config *_c = (rp1_pio_sm_config*)_config
@@ -987,38 +984,10 @@ static void rp1_pio_interrupt_clear(PIO pio, uint pio_interrupt_num)
     (void)rp1_ioctl(pio, PIO_IOC_INTERRUPT_CLEAR, &args);
 }
 
-static void *irq_wait_thread(void *arg) {
-    RP1_PIO rp = (RP1_PIO)arg;
-    struct rp1_pio_irq_wait_args args;
-
-    args.timeout_ms = 0;
-    while (1) {
-        rp1_ioctl(&rp->base, PIO_IOC_IRQ_WAIT, &args);
-        if (!args.active_mask)
-            break;
-        printf("woke %x\n", args.active_mask);
-    }
-
-    return NULL;
-}
-
-static void rp1_pio_irq_start_thread(PIO pio) {
-    RP1_PIO rp = (RP1_PIO)pio;
-    pthread_mutex_lock(&rp->lock);
-    if (!rp->irq_thread_running) {
-        if (pthread_create(&rp->irq_thread, NULL, irq_wait_thread, rp))
-            pio_panic("Failed to create irq wait thread!");
-        rp->irq_thread_running = true;
-    }
-    pthread_mutex_unlock(&rp->lock);
-}
-
 static int rp1_pio_irq_claim(PIO pio)
 {
     struct rp1_pio_irq_claim_args args = { .irq_index = -1 };
     (void)rp1_ioctl(pio, PIO_IOC_IRQ_CLAIM, &args);
-    if (args.irq_index >= 0)
-        rp1_pio_irq_start_thread(pio);
     return args.irq_index;
 }
 
@@ -1048,7 +1017,10 @@ static PIO rp1_create_instance(PIO_CHIP_T *chip, uint index)
     pio->base.chip = chip;
     pio->fd = -1;
     pio->devname = strdup(pathbuf);
-    pthread_mutex_init(&pio->lock, NULL);
+    if (!pio->devname) {
+        free(pio);
+        return PIO_ERR(-ENOMEM);
+    }
 
     return &pio->base;
 }
@@ -1069,6 +1041,8 @@ static void rp1_close_instance(PIO pio)
 {
     RP1_PIO rp = (RP1_PIO)pio;
     close(rp->fd);
+    /* Don't leave a stale descriptor that might end up referring to another file */
+    rp->fd = -1;
 }
 
 DECLARE_PIO_CHIP(rp1) {

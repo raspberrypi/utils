@@ -43,7 +43,7 @@ modification, are permitted provided that the following conditions are met:
 #define CFG_DIR_1 "/sys/kernel/config"
 #define CFG_DIR_2 "/config"
 #define DT_SUBDIR "/device-tree"
-#define WORK_DIR "/tmp/.dtoverlays"
+#define WORK_DIR "/run/dtoverlays"
 #define OVERLAY_SRC_SUBDIR "overlays"
 #define README_FILE "README"
 #define DT_OVERLAYS_SUBDIR "overlays"
@@ -88,6 +88,7 @@ static int dtoverlay_list(STATE_T *state);
 static int dtoverlay_list_all(STATE_T *state);
 static void usage(void);
 static void root_check(void);
+static int check_work_dir(const char *dir, int create);
 
 static void overlay_help(const char *overlay, const char **params);
 
@@ -120,6 +121,7 @@ int main(int argc, const char **argv)
     int ret = 0;
     STATE_T *state = NULL;
     const char *cfg_dir;
+    int have_work_dir = 1;
 
     cmd_name = argv[0];
     if (strrchr(cmd_name, '/'))
@@ -251,10 +253,11 @@ int main(int argc, const char **argv)
         goto orderly_exit;
     }
 
-    if (!dir_exists(work_dir))
+    if (!dry_run)
     {
-        if (mkdir(work_dir, DIR_MODE) != 0)
-            fatal_error("Failed to create '%s' - %d", work_dir, errno);
+        /* Only root may create the state directory. Others can still list
+           the active overlays if it exists. */
+        have_work_dir = check_work_dir(work_dir, getuid() == 0);
     }
 
     error_file = sprintf_dup("%s/%s", work_dir, "error.dtb");
@@ -290,7 +293,7 @@ int main(int argc, const char **argv)
         if (!dir_exists(dt_overlays_dir))
             fatal_error("configfs overlays folder not found - incompatible kernel");
 
-        state = read_state(work_dir);
+        state = read_state(have_work_dir ? work_dir : NULL);
         if (!state)
             fatal_error("Failed to read state");
     }
@@ -1128,6 +1131,32 @@ static void root_check(void)
         fatal_error("Must be run as root - try 'sudo %s ...'", cmd_name);
 }
 
+/* Returns 1 if the directory exists (creating it if requested), 0 if it
+   doesn't. Exits if it exists but can't be trusted. */
+static int check_work_dir(const char *dir, int create)
+{
+    struct stat st;
+
+    if (create && (mkdir(dir, DIR_MODE) != 0) && (errno != EEXIST))
+        fatal_error("Failed to create '%s' - %s", dir, strerror(errno));
+
+    if (lstat(dir, &st) != 0)
+    {
+        if (errno == ENOENT)
+            return 0;
+        fatal_error("Failed to stat '%s' - %s", dir, strerror(errno));
+    }
+
+    /* The contents are replayed into the kernel, so they must only be
+       writable by root */
+    if (!S_ISDIR(st.st_mode) || (st.st_uid != 0) ||
+        (st.st_mode & (S_IWGRP | S_IWOTH)))
+        fatal_error("'%s' is not a directory owned and only writable by root",
+                    dir);
+
+    return 1;
+}
+
 static void overlay_help(const char *overlay, const char **params)
 {
     OVERLAY_HELP_STATE_T *state;
@@ -1284,7 +1313,18 @@ static STATE_T *read_state(const char *dir)
 
     if (state)
     {
-        state->count = scandir(dir, &state->namelist, seq_filter, seq_compare);
+        state->count = 0;
+        state->namelist = NULL;
+        if (dir)
+        {
+            state->count = scandir(dir, &state->namelist, seq_filter,
+                                   seq_compare);
+            if (state->count < 0)
+            {
+                free(state);
+                return NULL;
+            }
+        }
 
         for (i = 0; i < state->count; i++)
         {

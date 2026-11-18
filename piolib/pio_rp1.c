@@ -104,6 +104,20 @@ static inline void check_sm_mask(__unused uint mask)
     valid_params_if(PIO, mask < (1u << RP1_PIO_SM_COUNT));
 }
 
+/*
+ * The instructions are copied into a fixed-size buffer, so this has to be a
+ * real check, not a parameter assertion that is usually compiled out.
+ */
+static bool rp1_pio_program_fits(const pio_program_t *program, uint offset)
+{
+    if (program->length > RP1_PIO_INSTRUCTION_COUNT)
+        return false;
+    if (offset == PIO_ORIGIN_ANY)
+        return true;
+    return offset < RP1_PIO_INSTRUCTION_COUNT &&
+           offset + program->length <= RP1_PIO_INSTRUCTION_COUNT;
+}
+
 static pio_sm_config rp1_pio_get_default_sm_config(PIO)
 {
     pio_sm_config c = { { 0 } };
@@ -303,6 +317,8 @@ static bool rp1_pio_can_add_program_at_offset(PIO pio, const pio_program_t *prog
     valid_params_if(PIO, offset < RP1_PIO_INSTRUCTION_COUNT || offset == PIO_ORIGIN_ANY);
     valid_params_if(PIO, program->length <= RP1_PIO_INSTRUCTION_COUNT);
     valid_params_if(PIO, offset + program->length <= RP1_PIO_INSTRUCTION_COUNT || offset == PIO_ORIGIN_ANY);
+    if (!rp1_pio_program_fits(program, offset))
+        return false;
     if (program->origin >= 0 && (uint)program->origin != offset)
         return false;
     if (offset != PIO_ORIGIN_ANY)
@@ -320,6 +336,8 @@ static uint rp1_pio_add_program_at_offset(PIO pio, const pio_program_t *program,
     valid_params_if(PIO, offset < RP1_PIO_INSTRUCTION_COUNT || offset == PIO_ORIGIN_ANY);
     valid_params_if(PIO, program->length <= RP1_PIO_INSTRUCTION_COUNT);
     valid_params_if(PIO, offset + program->length <= RP1_PIO_INSTRUCTION_COUNT || offset == PIO_ORIGIN_ANY);
+    if (!rp1_pio_program_fits(program, offset))
+        return PIO_ORIGIN_INVALID;
     if (offset != PIO_ORIGIN_ANY)
         args.origin = offset;
     memcpy(args.instrs, program->instructions, program->length * sizeof(uint16_t));

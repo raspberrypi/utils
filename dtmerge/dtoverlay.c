@@ -2972,18 +2972,23 @@ int dtoverlay_save_dtb(const DTBLOB_T *dtb, const char *filename)
         {
             dtoverlay_error("fwrite failed");
             err = -2;
-            goto error_exit;
         }
-        if (dtb->trailer_len &&
-            (fwrite(dtb->trailer, dtb->trailer_len, 1, fp) != 1))
+        else if (dtb->trailer_len &&
+                 (fwrite(dtb->trailer, dtb->trailer_len, 1, fp) != 1))
         {
             dtoverlay_error("fwrite failed");
             err = -2;
-            goto error_exit;
         }
 
-        dtoverlay_debug("wrote %ld bytes to '%s'", len, filename);
-        fclose(fp);
+        /* Buffered data is only written (and the error reported) here */
+        if ((fclose(fp) != 0) && !err)
+        {
+            dtoverlay_error("failed to write '%s'", filename);
+            err = -2;
+        }
+
+        if (!err)
+            dtoverlay_debug("wrote %d bytes to '%s'", len, filename);
     }
     else
     {
@@ -2991,7 +2996,6 @@ int dtoverlay_save_dtb(const DTBLOB_T *dtb, const char *filename)
         err = -1;
     }
 
-  error_exit:
     return err;
 }
 

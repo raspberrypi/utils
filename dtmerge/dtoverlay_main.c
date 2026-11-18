@@ -101,6 +101,7 @@ static void lock_state(int exclusive);
 static void overlay_help(const char *overlay, const char **params);
 
 static int apply_overlay(const char *overlay_file, const char *overlay);
+static int save_dtb_atomic(DTBLOB_T *dtb, const char *filename);
 static int overlay_applied(const char *overlay_dir);
 
 static STATE_T *read_state(const char *dir);
@@ -791,8 +792,10 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
 
     /* then write the overlay to the file */
     dtoverlay_pack_dtb(overlay_dtb);
-    dtoverlay_save_dtb(overlay_dtb, overlay_file);
+    err = save_dtb_atomic(overlay_dtb, overlay_file);
     dtoverlay_free_dtb(overlay_dtb);
+    if (err)
+        return error("Failed to write '%s'", overlay_file);
 
     if (!dry_run && !apply_overlay(overlay_file, overlay_name))
     {
@@ -1014,15 +1017,19 @@ static int dtoverlay_list(STATE_T *state)
 
             saved_overlay = sprintf_dup("%s/%s", work_dir, name);
             dtb = dtoverlay_load_dtb(saved_overlay, 0);
+            free_string(saved_overlay);
 
-            if (dtoverlay_dtb_trailer(dtb))
+            if (!dtb)
+                printf("%d:  %.*s <unreadable>\n", i, (int)(right - left), left);
+            else if (dtoverlay_dtb_trailer(dtb))
                 printf("%d:  %.*s %.*s\n", i, (int)(right - left), left,
                        dtoverlay_dtb_trailer_len(dtb),
                        (char *)dtoverlay_dtb_trailer(dtb));
             else
                 printf("%d:  %.*s\n", i, (int)(right - left), left);
 
-            dtoverlay_free_dtb(dtb);
+            if (dtb)
+                dtoverlay_free_dtb(dtb);
         }
     }
 
@@ -1345,6 +1352,25 @@ static int apply_overlay(const char *overlay_file, const char *overlay)
     }
 
     return ret;
+}
+
+/* Write a DTB so that a reader never sees a partial file, even if this
+   process is killed. The state lives on a tmpfs that doesn't survive a
+   power cut, so there is no need to fsync. The file must be in work_dir;
+   the temporary name is hidden from seq_filter. */
+static int save_dtb_atomic(DTBLOB_T *dtb, const char *filename)
+{
+    const char *tmp_file = sprintf_dup("%s/.new.dtbo", work_dir);
+    int err;
+
+    err = dtoverlay_save_dtb(dtb, tmp_file);
+    if (!err && (rename(tmp_file, filename) != 0))
+        err = -1;
+    if (err)
+        unlink(tmp_file);
+    free_string(tmp_file);
+
+    return err;
 }
 
 static int overlay_applied(const char *overlay_dir)

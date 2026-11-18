@@ -33,6 +33,7 @@ modification, are permitted provided that the following conditions are met:
 #include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
+#include <signal.h>
 #include <fcntl.h>
 #include <sys/file.h>
 #include <sys/mount.h>
@@ -98,6 +99,7 @@ static void usage(void);
 static void root_check(void);
 static int check_work_dir(const char *dir, int create);
 static void lock_state(int exclusive);
+static void defer_signals(int defer);
 
 static void overlay_help(const char *overlay, const char **params);
 
@@ -361,6 +363,11 @@ int main(int argc, const char **argv)
         break;
     }
 
+    /* Don't let a signal leave configfs and the state directory out of
+       step - act on it once they agree again */
+    if (modifying)
+        defer_signals(1);
+
     switch (opt)
     {
     case OPT_ADD:
@@ -382,6 +389,10 @@ int main(int argc, const char **argv)
         ret = 1;
         break;
     }
+
+    /* Any pending signal is delivered here, and the hook doesn't run */
+    if (modifying)
+        defer_signals(0);
 
     switch (opt)
     {
@@ -1255,6 +1266,31 @@ static void lock_state(int exclusive)
                         "to finish");
         usleep(LOCK_POLL_MS * 1000);
         waited_ms += LOCK_POLL_MS;
+    }
+}
+
+/* Block (or unblock) the signals that would normally terminate the process
+   when sent by a user or a terminal. Unblocking delivers any that arrived
+   in the meantime. SIGKILL can't be blocked. Child processes (dtc, when a
+   dtparam is regenerated) inherit the blocked set. */
+static void defer_signals(int defer)
+{
+    static sigset_t old_set;
+    sigset_t set;
+
+    if (defer)
+    {
+        sigemptyset(&set);
+        sigaddset(&set, SIGHUP);
+        sigaddset(&set, SIGINT);
+        sigaddset(&set, SIGQUIT);
+        sigaddset(&set, SIGTERM);
+        sigaddset(&set, SIGPIPE);
+        sigprocmask(SIG_BLOCK, &set, &old_set);
+    }
+    else
+    {
+        sigprocmask(SIG_SETMASK, &old_set, NULL);
     }
 }
 

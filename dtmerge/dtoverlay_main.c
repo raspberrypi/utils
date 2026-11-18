@@ -298,12 +298,14 @@ int main(int argc, const char **argv)
     {
         root_check();
 
+        /* Only one instance may mount configfs. Listing only holds a shared
+           lock, so upgrade it (by now the root user has a lock file). */
+        if (!modifying && !in_hook)
+            lock_state(1);
+
         cfg_dir = CFG_DIR_2;
-        if (!dir_exists(cfg_dir))
-        {
-            if (mkdir(cfg_dir, DIR_MODE) != 0)
-                fatal_error("Failed to create '%s' - %d", cfg_dir, errno);
-        }
+        if ((mkdir(cfg_dir, DIR_MODE) != 0) && (errno != EEXIST))
+            fatal_error("Failed to create '%s' - %s", cfg_dir, strerror(errno));
 
         cfg_dir = CFG_DIR_2 DT_SUBDIR;
         if (!dir_exists(cfg_dir) &&
@@ -801,8 +803,10 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
     {
         if (error_file)
         {
+            /* Keep the failed overlay, and don't delete it on exit */
             rename(overlay_file, error_file);
             free_string(error_file);
+            error_file = NULL;
         }
         return 1;
     }

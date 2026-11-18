@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +21,12 @@
 #define PIO_MAX_INSTANCES 4
 #define PIO_MAX_IRQS 16
 
+/*
+ * How often the IRQ thread checks whether it should exit, which is also how
+ * long pio_close may have to wait for it.
+ */
+#define PIO_IRQ_POLL_MS 100
+
 static __thread PIO __pio;
 
 struct pio_irq_handler {
@@ -30,8 +37,10 @@ struct pio_irq_handler {
 
 static PIO pio_instances[PIO_MAX_INSTANCES];
 static uint num_instances;
-static pthread_mutex_t pio_handle_lock;
+static pthread_mutex_t pio_handle_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t pio_irq_threads[PIO_MAX_INSTANCES];
+static bool pio_irq_thread_running[PIO_MAX_INSTANCES];
+static atomic_bool pio_irq_thread_stop[PIO_MAX_INSTANCES];
 static struct pio_irq_handler irq_handlers[PIO_MAX_IRQS];
 static uint num_irqs;
 
@@ -60,9 +69,15 @@ int pio_get_index(PIO pio)
 
 static void *irq_wait_thread(void *arg) {
     PIO pio = (PIO)arg;
+    int idx = pio_get_index(pio);
 
-    while (1) {
-        uint32_t active = pio->chip->pio_irq_wait(pio, 0);
+    /*
+     * Wait with a timeout, so that pio_close can stop the thread. A thread
+     * blocked indefinitely in the kernel would keep the device open, along
+     * with everything that had been claimed through it.
+     */
+    while (!atomic_load(&pio_irq_thread_stop[idx])) {
+        uint32_t active = pio->chip->pio_irq_wait(pio, PIO_IRQ_POLL_MS);
         uint i;
         if (active == ~0u)
             break;
@@ -70,13 +85,59 @@ static void *irq_wait_thread(void *arg) {
             uint32_t mask = (1 << i);
             if (active & mask) {
                 struct pio_irq_handler *h = &irq_handlers[pio->irq_base + i];
+                irq_handler_t handler = h->handler;
                 active &= ~mask;
-                (h->handler)(h->context);
+                if (handler)
+                    handler(h->context);
             }
         }
     }
 
     return NULL;
+}
+
+/* The IRQ thread is only needed (and only started) once an IRQ is in use */
+static void pio_irq_thread_start(PIO pio)
+{
+    int idx = pio_get_index(pio);
+
+    if (idx < 0)
+        return;
+
+    pthread_mutex_lock(&pio_handle_lock);
+    if (!pio_irq_thread_running[idx]) {
+        atomic_store(&pio_irq_thread_stop[idx], false);
+        if (pthread_create(&pio_irq_threads[idx], NULL, irq_wait_thread, pio))
+            pio_panic("Failed to create irq wait thread!");
+        pio_irq_thread_running[idx] = true;
+    }
+    pthread_mutex_unlock(&pio_handle_lock);
+}
+
+static void pio_irq_thread_stop_and_wait(PIO pio)
+{
+    int idx = pio_get_index(pio);
+    pthread_t thread;
+    bool running;
+
+    if (idx < 0)
+        return;
+
+    pthread_mutex_lock(&pio_handle_lock);
+    running = pio_irq_thread_running[idx];
+    thread = pio_irq_threads[idx];
+    pio_irq_thread_running[idx] = false;
+    pthread_mutex_unlock(&pio_handle_lock);
+
+    if (!running)
+        return;
+
+    atomic_store(&pio_irq_thread_stop[idx], true);
+    /* Closing from an IRQ handler means the thread can't wait for itself */
+    if (pthread_equal(thread, pthread_self()))
+        pthread_detach(thread);
+    else
+        pthread_join(thread, NULL);
 }
 
 int pio_init(void)
@@ -91,10 +152,13 @@ int pio_init(void)
     static bool initialised;
     const PIO_CHIP_T * const *p;
     uint i = 0;
-    int err;
 
-    if (initialised)
+    pthread_mutex_lock(&pio_handle_lock);
+
+    if (initialised) {
+        pthread_mutex_unlock(&pio_handle_lock);
         return 0;
+    }
     num_instances = 0;
     num_irqs = 0;
 
@@ -123,11 +187,8 @@ int pio_init(void)
         }
     }
 
-    err = pthread_mutex_init(&pio_handle_lock, NULL);
-    if (err)
-        return err;
-
     initialised = true;
+    pthread_mutex_unlock(&pio_handle_lock);
     return 0;
 }
 
@@ -161,15 +222,15 @@ PIO pio_open(uint idx)
 
     err = pio->chip->open_instance(pio);
     if (err) {
+        pthread_mutex_lock(&pio_handle_lock);
         pio->in_use = 0;
+        pthread_mutex_unlock(&pio_handle_lock);
         return PIO_ERR(err);
-    } else if (pio->irq_count) {
-        for (i = 0; i < pio->irq_count; i++)
-            pio->irqs[i] = -1;
-
-        if (pthread_create(&pio_irq_threads[idx], NULL, irq_wait_thread, pio))
-            pio_panic("Failed to create irq wait thread!");
     }
+
+    /* The IRQ thread is started when the first IRQ is mapped */
+    for (i = 0; i < pio->irq_count; i++)
+        pio->irqs[i] = -1;
 
     pio_select(pio);
 
@@ -213,6 +274,8 @@ PIO pio_open_helper(uint idx)
 
 void pio_close(PIO pio)
 {
+    /* Stop the IRQ thread first, otherwise it keeps the device open */
+    pio_irq_thread_stop_and_wait(pio);
     pio->chip->close_instance(pio);
     pthread_mutex_lock(&pio_handle_lock);
     pio->in_use = 0;
@@ -247,6 +310,7 @@ uint pio_irq_map(PIO pio, uint irq_index) {
     }
     if (pirq < 0)
         pio_panic("Unable to map irq");
+    pio_irq_thread_start(pio);
     return (uint)pirq;
 }
 

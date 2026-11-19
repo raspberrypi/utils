@@ -37,6 +37,7 @@ modification, are permitted provided that the following conditions are met:
 #include <fcntl.h>
 #include <sys/file.h>
 #include <sys/mount.h>
+#include <sys/wait.h>
 
 #include <libfdt.h>
 
@@ -100,6 +101,7 @@ static void root_check(void);
 static int check_work_dir(const char *dir, int create);
 static void lock_state(int exclusive);
 static void defer_signals(int defer);
+static int read_live_dt(const char *dtb_file);
 
 static void overlay_help(const char *overlay, const char **params);
 
@@ -679,8 +681,7 @@ static int dtoverlay_add(STATE_T *state, const char *overlay,
     {
         /* Convert /proc/device-tree to a .dtb and load it */
         overlay_file = sprintf_dup("%s/%s", work_dir, "base.dtb");
-        if (run_cmd("dtc -I fs -O dtb -o '%s' /proc/device-tree 1>/dev/null 2>&1",
-                    overlay_file) != 0)
+        if (read_live_dt(overlay_file) != 0)
             return error("Failed to read active DTB");
     }
     else if ((len > 0) && (strcmp(overlay + len, ".dtbo") == 0))
@@ -1281,25 +1282,80 @@ static void lock_state(int exclusive)
    when sent by a user or a terminal. Unblocking delivers any that arrived
    in the meantime. SIGKILL can't be blocked. Child processes (dtc, when a
    dtparam is regenerated) inherit the blocked set. */
+static const int deferred_signals[] =
+{
+    SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGPIPE
+};
+
+#define NUM_DEFERRED_SIGNALS \
+    (int)(sizeof(deferred_signals) / sizeof(deferred_signals[0]))
+
 static void defer_signals(int defer)
 {
     static sigset_t old_set;
     sigset_t set;
+    int i;
 
     if (defer)
     {
         sigemptyset(&set);
-        sigaddset(&set, SIGHUP);
-        sigaddset(&set, SIGINT);
-        sigaddset(&set, SIGQUIT);
-        sigaddset(&set, SIGTERM);
-        sigaddset(&set, SIGPIPE);
+        for (i = 0; i < NUM_DEFERRED_SIGNALS; i++)
+            sigaddset(&set, deferred_signals[i]);
         sigprocmask(SIG_BLOCK, &set, &old_set);
     }
     else
     {
         sigprocmask(SIG_SETMASK, &old_set, NULL);
     }
+}
+
+/* Snapshot the live device tree into a .dtb file using dtc. Signals sent
+   to the process group (Ctrl-C, timeout) would otherwise kill dtc even
+   while they are deferred here, losing a dtparam that is being regenerated,
+   so while they are deferred the child ignores them - an ignored signal
+   stays ignored across exec. Running dtc directly also avoids passing the
+   filename through a shell. */
+static int read_live_dt(const char *dtb_file)
+{
+    sigset_t blocked;
+    int status;
+    pid_t pid;
+    int i;
+
+    dtoverlay_debug("dtc -I fs -O dtb -o %s /proc/device-tree", dtb_file);
+
+    pid = fork();
+    if (pid < 0)
+        return -1;
+
+    if (pid == 0)
+    {
+        int fd = open("/dev/null", O_RDWR);
+        if (fd >= 0)
+        {
+            dup2(fd, STDOUT_FILENO);
+            dup2(fd, STDERR_FILENO);
+        }
+
+        sigprocmask(SIG_BLOCK, NULL, &blocked);
+        for (i = 0; i < NUM_DEFERRED_SIGNALS; i++)
+        {
+            if (sigismember(&blocked, deferred_signals[i]))
+                signal(deferred_signals[i], SIG_IGN);
+        }
+
+        execlp("dtc", "dtc", "-I", "fs", "-O", "dtb", "-o", dtb_file,
+               "/proc/device-tree", (char *)NULL);
+        _exit(127);
+    }
+
+    while (waitpid(pid, &status, 0) < 0)
+    {
+        if (errno != EINTR)
+            return -1;
+    }
+
+    return (WIFEXITED(status) && (WEXITSTATUS(status) == 0)) ? 0 : -1;
 }
 
 static void overlay_help(const char *overlay, const char **params)

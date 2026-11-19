@@ -29,6 +29,8 @@ A collection of scripts and simple applications
     secure-boot provisioner.
 * [rpi-gpu-usage](rpi-gpu-usage/) - A tool for showing the per-process usage of the V3D GPU
     on Raspberry Pi 4 and 5.
+* [rpi-manufacture-info](rpi-manufacture-info/) - Displays the manufacturing information
+    provisioned in BCM2711 and BCM2712 OTP, including the SDRAM configuration.
 * [splashasm](splashasm/) - A tool for writing spi & i2c dumps for fast display at boot
 * [vcgencmd](vcgencmd/) - A tool to send commands to the VideoCore firmware and
     display the results.

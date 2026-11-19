@@ -210,7 +210,7 @@ int32_t main(int32_t argc, char *argv[])
             payload_pos = log_copy_wrap(log_buffer, log_size,
                                         read_pos, sizeof(msg), (char *)&msg);
             payload_len = msg.size - sizeof(msg_hdr_t);
-            if (payload_len > log_size)
+            if (msg.size < sizeof(msg_hdr_t) || payload_len > log_size)
             {
                 DLOG("log corrupt 1\n");
                 corrupt_retries++;

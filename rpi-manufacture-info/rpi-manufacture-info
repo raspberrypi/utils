@@ -1,0 +1,258 @@
+#!/bin/sh
+
+# Display the manufacturing information provisioned in BCM2711 / BCM2712 OTP.
+set -ef
+
+usage() {
+   cat <<EOF
+Usage: rpi-manufacture-info [-h | --help]
+
+Display the manufacturing information provisioned in the OTP of BCM2711
+(Raspberry Pi 4 family) and BCM2712 (Raspberry Pi 5 family) devices: serial
+number, board revision, MAC addresses, board attributes and SDRAM
+configuration.
+
+The SDRAM_CONFIG size is converted to the equivalent board revision memory
+size field and compared with the OTP board revision and the running board
+revision. If SDRAM_CONFIG is not programmed then the memory size is taken from
+the board revision.
+
+Requires vcgencmd and access to /dev/vcio.
+EOF
+}
+
+die() {
+   echo "rpi-manufacture-info: $*" >&2
+   exit 1
+}
+
+# Memory size of a board revision memory field (bits 22:20)
+memsizeName() {
+   case "$1" in
+      [01]) echo "$((256 << $1))MB" ;;
+      [2-6]) echo "$((1 << ($1 - 2)))GB" ;;
+      7) echo "Other" ;;
+      *) echo "Unknown" ;;
+   esac
+}
+
+# Total SDRAM size in Gbit from the SDRAM_CONFIG size enum (bits 2:0)
+# and non-power-of-two flag (bit 5). 24Gbit is the only valid size which is
+# not a power of two.
+sdramSizeGbit() {
+   case $(($1 & 0x27)) in
+      7) echo 8 ;;
+      6) echo 16 ;;
+      38) echo 24 ;; # 0x26: 16Gbit enum with the non-power-of-two flag
+      5) echo 32 ;;
+      4) echo 64 ;;
+      3) echo 128 ;;
+      *) echo 0 ;;
+   esac
+}
+
+# Board revision memory field for a size in Gbit. Sizes which are not a power
+# of two do not fit in the board revision and are encoded as Other.
+gbitToMemsize() {
+   case "$1" in
+      2) echo 0 ;;
+      4) echo 1 ;;
+      8) echo 2 ;;
+      16) echo 3 ;;
+      32) echo 4 ;;
+      64) echo 5 ;;
+      128) echo 6 ;;
+      *) echo 7 ;;
+   esac
+}
+
+gbitName() {
+   if [ "$1" -ge 8 ] && [ $(($1 % 8)) -eq 0 ]; then
+      echo "$(($1 / 8))GB"
+   else
+      echo "$(($1 * 128))MB"
+   fi
+}
+
+otpRow() {
+   printf '%s\n' "${otp_dump}" | sed -n "s/^$1:\([0-9a-fA-F]\{8\}\)\$/\1/p"
+}
+
+macFromRows() {
+   lo=$(otpRow "$1")
+   hi=$(otpRow "$(($1 + 1))")
+   if [ -z "${lo}" ] || [ -z "${hi}" ]; then
+      echo "Unavailable"
+   elif [ $((0x${lo} | 0x${hi})) -eq 0 ]; then
+      echo "Not programmed"
+   else
+      printf '%s%s\n' "${hi}" "${lo%????}" | sed 's/../&:/g; s/:$//' | tr 'A-F' 'a-f'
+   fi
+}
+
+decodeSdramConfig() {
+   gbit=$(sdramSizeGbit "$1")
+   if [ "${gbit}" -eq 0 ]; then
+      size="unknown size"
+   else
+      size="${gbit}Gbit ($(gbitName "${gbit}"))"
+   fi
+   if [ $((($1 >> 4) & 1)) -eq 1 ]; then
+      rank="dual-rank"
+   else
+      rank="single-rank"
+   fi
+   printf '0x%03x %s %s\n' "$1" "${size}" "${rank}"
+}
+
+# The QrCode is the code scanned in the factory. It is stored C40 encoded in
+# OTP rows 109 to 114 and the firmware exports the decoded value as rpi-duid.
+qrCode() {
+   if [ -r /proc/device-tree/chosen/rpi-duid ]; then
+      tr -d '\0' < /proc/device-tree/chosen/rpi-duid
+      echo
+   else
+      echo "Not available"
+   fi
+}
+
+if [ "$#" -ne 0 ]; then
+   if [ "$#" -eq 1 ] && { [ "$1" = -h ] || [ "$1" = --help ]; }; then
+      usage
+      exit 0
+   fi
+   usage >&2
+   exit 1
+fi
+
+if grep -q 'brcm,bcm2712' /proc/device-tree/compatible 2>/dev/null; then
+   chip=2712
+   row_serial=31
+   row_revision=32
+   mac_rows="Ethernet:50 Wi-Fi:52 Bluetooth:54"
+elif grep -q 'brcm,bcm2711' /proc/device-tree/compatible 2>/dev/null; then
+   chip=2711
+   row_serial=28
+   row_revision=30
+   mac_rows="Ethernet:64"
+else
+   die "Only BCM2711 and BCM2712 devices are supported."
+fi
+row_attributes=33
+
+command -v vcgencmd > /dev/null || die "vcgencmd is required to read OTP."
+otp_dump=$(vcgencmd otp_dump 2>/dev/null) || die "Failed to read OTP; check access to /dev/vcio."
+
+serial=$(otpRow "${row_serial}")
+otp_revision=$(otpRow "${row_revision}")
+attributes=$(otpRow "${row_attributes}")
+if [ -z "${serial}" ] || [ -z "${otp_revision}" ] || [ -z "${attributes}" ]; then
+   die "Failed to parse OTP dump."
+fi
+
+if [ "${chip}" = 2712 ]; then
+   sdram_row=34
+   sdram_otp=$(otpRow "${sdram_row}")
+   [ -n "${sdram_otp}" ] || die "Failed to parse OTP dump."
+   serial="$(otpRow 35)${serial}"
+   # Bits 11:0 are the configuration programmed during manufacture.
+   # Bits 27:16, if set, replace it e.g. after the SDRAM has been reworked.
+   sdram_config0=$((0x${sdram_otp} & 0xfff))
+   sdram_config1=$(((0x${sdram_otp} >> 16) & 0xfff))
+else
+   # BCM2711 stores a 9-bit SDRAM_CONFIG in bits 16:8 of the board
+   # attributes row.
+   sdram_row=${row_attributes}
+   sdram_otp=${attributes}
+   sdram_config0=$(((0x${sdram_otp} >> 8) & 0x1ff))
+   sdram_config1=0
+fi
+
+# Running board revision, as used by the OS.
+dt_revision=/proc/device-tree/system/linux,revision
+if [ -r "${dt_revision}" ]; then
+   running_revision=$(od -v -An -t x1 "${dt_revision}" | tr -d ' \n')
+else
+   running_revision=$(sed -n 's/^Revision[[:space:]]*: *\([0-9a-fA-F]*\)$/\1/p' /proc/cpuinfo)
+fi
+
+echo "OTP manufacturing information"
+echo
+echo "Serial number          : ${serial}"
+[ "${chip}" = 2712 ] && echo "QrCode                 : $(qrCode)"
+echo "Board revision (OTP)   : ${otp_revision}"
+otp_memsize=$(((0x${otp_revision} >> 20) & 7))
+echo "  Memory size field    : ${otp_memsize} ($(memsizeName "${otp_memsize}"))"
+if [ -n "${running_revision}" ]; then
+   running_memsize=$(((0x${running_revision} >> 20) & 7))
+   echo "Board revision (OS)    : ${running_revision}"
+   echo "  Memory size field    : ${running_memsize} ($(memsizeName "${running_memsize}"))"
+fi
+for mac in ${mac_rows}; do
+   printf '%-23s: %s\n' "${mac%:*} MAC" "$(macFromRows "${mac#*:}")"
+done
+echo
+
+# Board attributes. The Wi-Fi and eMMC bits are only used on Compute Modules.
+# They were not programmed on older devices, where the board type in the
+# board revision is the only indication of a Lite (no eMMC) module.
+echo "Board attrs (OTP ${row_attributes})   : ${attributes}"
+board_type=$(((0x${otp_revision} >> 4) & 0xff))
+case "${board_type}" in
+   20|21|24|26) # CM4, CM4S, CM5, CM5 Lite
+      if [ $((0x${attributes} & 0x80000000)) -ne 0 ]; then
+         emmc="Not fitted (Lite)"
+      elif [ "${board_type}" -eq 26 ]; then
+         emmc="Not fitted (CM5 Lite board revision)"
+      else
+         emmc="Fitted"
+      fi
+      echo "  eMMC                 : ${emmc}"
+      if [ "${board_type}" -ne 21 ]; then
+         if [ $((0x${attributes} & 0x40000000)) -ne 0 ]; then
+            wifi="Not fitted"
+         else
+            wifi="Fitted"
+         fi
+         echo "  Wi-Fi                : ${wifi}"
+      fi
+      ;;
+esac
+echo
+
+echo "SDRAM_CONFIG (OTP ${sdram_row})  : ${sdram_otp}"
+if [ "${sdram_config0}" -eq 0 ]; then
+   echo "  Manufacture config   : Not programmed"
+else
+   echo "  Manufacture config   : $(decodeSdramConfig "${sdram_config0}")"
+fi
+if [ "${sdram_config1}" -ne 0 ]; then
+   echo "  Override config      : $(decodeSdramConfig "${sdram_config1}")"
+   sdram_config=${sdram_config1}
+else
+   sdram_config=${sdram_config0}
+fi
+
+gbit=0
+[ "${sdram_config}" -eq 0 ] || gbit=$(sdramSizeGbit "${sdram_config}")
+if [ "${gbit}" -eq 0 ]; then
+   echo "  Memory size          : $(memsizeName "${otp_memsize}") (from board revision)"
+   exit 0
+fi
+
+memsize=$(gbitToMemsize "${gbit}")
+echo "  Memory size field    : ${memsize} ($(memsizeName "${memsize}")) equivalent"
+for src in OTP OS; do
+   if [ "${src}" = OTP ]; then
+      rev_memsize=${otp_memsize}
+   else
+      [ -n "${running_revision}" ] || continue
+      rev_memsize=${running_memsize}
+   fi
+   if [ "${memsize}" -eq "${rev_memsize}" ]; then
+      result="matches"
+   else
+      result="differs from"
+   fi
+   echo "  SDRAM_CONFIG size ${result} board revision (${src}) memory size"
+done

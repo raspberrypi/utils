@@ -83,9 +83,6 @@ typedef struct rp1_pio_handle {
     struct pio_instance base;
     const char *devname;
     int fd;
-    bool irq_thread_running;
-    pthread_mutex_t lock;
-    pthread_t irq_thread;
 } *RP1_PIO;
 
 #define smc_to_rp1(_config, _c) rp1_pio_sm_config *_c = (rp1_pio_sm_config*)_config
@@ -102,6 +99,20 @@ static inline void check_sm_param(__unused uint sm)
 static inline void check_sm_mask(__unused uint mask)
 {
     valid_params_if(PIO, mask < (1u << RP1_PIO_SM_COUNT));
+}
+
+/*
+ * The instructions are copied into a fixed-size buffer, so this has to be a
+ * real check, not a parameter assertion that is usually compiled out.
+ */
+static bool rp1_pio_program_fits(const pio_program_t *program, uint offset)
+{
+    if (program->length > RP1_PIO_INSTRUCTION_COUNT)
+        return false;
+    if (offset == PIO_ORIGIN_ANY)
+        return true;
+    return offset < RP1_PIO_INSTRUCTION_COUNT &&
+           offset + program->length <= RP1_PIO_INSTRUCTION_COUNT;
 }
 
 static pio_sm_config rp1_pio_get_default_sm_config(PIO)
@@ -247,16 +258,20 @@ static uint rp1_pio_encode_nop(PIO)
 static int rp1_ioctl(PIO pio, int request, void *args)
 {
     RP1_PIO rp = (RP1_PIO)pio;
-    int err = ioctl(rp->fd, request, args);
-    switch (err) {
-    case -EREMOTEIO:
-    case -ETIMEDOUT:
-        pio_panic("Error communicating with RP1");
-        break;
-    default:
-        break;
+    int ret = ioctl(rp->fd, request, args);
+
+    if (ret < 0) {
+        ret = -errno;
+        switch (ret) {
+        case -EREMOTEIO:
+        case -ETIMEDOUT:
+            pio_panic("Error communicating with RP1");
+            break;
+        default:
+            break;
+        }
     }
-    return err;
+    return ret;
 }
 
 static int rp1_pio_sm_config_xfer(PIO pio, uint sm, uint dir, uint buf_size, uint buf_count)
@@ -270,6 +285,13 @@ static int rp1_pio_sm_config_xfer(PIO pio, uint sm, uint dir, uint buf_size, uin
     else
         err = rp1_ioctl(pio, PIO_IOC_SM_CONFIG_XFER, &args);
     return err;
+}
+
+static int rp1_pio_sm_config_xfer_flags(PIO pio, uint sm, uint dir, uint buf_size, uint buf_count, uint flags)
+{
+    struct rp1_pio_sm_config_xfer_v2_args args = { .sm = sm, .dir = dir, .buf_size = buf_size, .buf_count = buf_count, .flags = flags };
+    check_sm_param(sm);
+    return rp1_ioctl(pio, PIO_IOC_SM_CONFIG_XFER_V2, &args);
 }
 
 static int rp1_pio_sm_xfer_data(PIO pio, uint sm, uint dir, uint data_bytes, void *data)
@@ -292,6 +314,8 @@ static bool rp1_pio_can_add_program_at_offset(PIO pio, const pio_program_t *prog
     valid_params_if(PIO, offset < RP1_PIO_INSTRUCTION_COUNT || offset == PIO_ORIGIN_ANY);
     valid_params_if(PIO, program->length <= RP1_PIO_INSTRUCTION_COUNT);
     valid_params_if(PIO, offset + program->length <= RP1_PIO_INSTRUCTION_COUNT || offset == PIO_ORIGIN_ANY);
+    if (!rp1_pio_program_fits(program, offset))
+        return false;
     if (program->origin >= 0 && (uint)program->origin != offset)
         return false;
     if (offset != PIO_ORIGIN_ANY)
@@ -304,13 +328,18 @@ static bool rp1_pio_can_add_program_at_offset(PIO pio, const pio_program_t *prog
 static uint rp1_pio_add_program_at_offset(PIO pio, const pio_program_t *program, uint offset)
 {
     struct rp1_pio_add_program_args args = { .num_instrs = program->length, .origin = program->origin };
+    int ret;
+
     valid_params_if(PIO, offset < RP1_PIO_INSTRUCTION_COUNT || offset == PIO_ORIGIN_ANY);
     valid_params_if(PIO, program->length <= RP1_PIO_INSTRUCTION_COUNT);
     valid_params_if(PIO, offset + program->length <= RP1_PIO_INSTRUCTION_COUNT || offset == PIO_ORIGIN_ANY);
+    if (!rp1_pio_program_fits(program, offset))
+        return PIO_ORIGIN_INVALID;
     if (offset != PIO_ORIGIN_ANY)
         args.origin = offset;
     memcpy(args.instrs, program->instructions, program->length * sizeof(uint16_t));
-    return rp1_ioctl(pio, PIO_IOC_ADD_PROGRAM, &args);
+    ret = rp1_ioctl(pio, PIO_IOC_ADD_PROGRAM, &args);
+    return (ret < 0) ? PIO_ORIGIN_INVALID : (uint)ret;
 }
 
 static bool rp1_pio_remove_program(PIO pio, const pio_program_t *program, uint offset)
@@ -669,6 +698,68 @@ static void rp1_smc_set_sideset_pins(PIO, pio_sm_config *config, uint sideset_ba
                  (sideset_base << PROC_PIO_SM0_PINCTRL_SIDESET_BASE_LSB);
 }
 
+static void rp1_smc_set_out_pin_base(PIO, pio_sm_config *config, uint out_base)
+{
+    smc_to_rp1(config, c);
+    valid_params_if(PIO, out_base < RP1_PIO_GPIO_COUNT);
+    c->pinctrl = (c->pinctrl & ~PROC_PIO_SM0_PINCTRL_OUT_BASE_BITS) |
+                 (out_base << PROC_PIO_SM0_PINCTRL_OUT_BASE_LSB);
+}
+
+static void rp1_smc_set_out_pin_count(PIO, pio_sm_config *config, uint out_count)
+{
+    smc_to_rp1(config, c);
+    valid_params_if(PIO, out_count <= RP1_PIO_GPIO_COUNT);
+    c->pinctrl = (c->pinctrl & ~PROC_PIO_SM0_PINCTRL_OUT_COUNT_BITS) |
+                 (out_count << PROC_PIO_SM0_PINCTRL_OUT_COUNT_LSB);
+}
+
+static void rp1_smc_set_set_pin_base(PIO, pio_sm_config *config, uint set_base)
+{
+    smc_to_rp1(config, c);
+    valid_params_if(PIO, set_base < RP1_PIO_GPIO_COUNT);
+    c->pinctrl = (c->pinctrl & ~PROC_PIO_SM0_PINCTRL_SET_BASE_BITS) |
+                 (set_base << PROC_PIO_SM0_PINCTRL_SET_BASE_LSB);
+}
+
+static void rp1_smc_set_set_pin_count(PIO, pio_sm_config *config, uint set_count)
+{
+    smc_to_rp1(config, c);
+    valid_params_if(PIO, set_count <= 5);
+    c->pinctrl = (c->pinctrl & ~PROC_PIO_SM0_PINCTRL_SET_COUNT_BITS) |
+                 (set_count << PROC_PIO_SM0_PINCTRL_SET_COUNT_LSB);
+}
+
+static void rp1_smc_set_in_pin_base(PIO, pio_sm_config *config, uint in_base)
+{
+    smc_to_rp1(config, c);
+    valid_params_if(PIO, in_base < RP1_PIO_GPIO_COUNT);
+    c->pinctrl = (c->pinctrl & ~PROC_PIO_SM0_PINCTRL_IN_BASE_BITS) |
+                 (in_base << PROC_PIO_SM0_PINCTRL_IN_BASE_LSB);
+}
+
+static void rp1_smc_set_in_pin_count(PIO, __unused pio_sm_config *config, __unused uint in_count)
+{
+    /* RP1 PIO has no IN_COUNT field - the count is fixed at 32 */
+    valid_params_if(PIO, in_count == 32);
+}
+
+static void rp1_smc_set_sideset_pin_base(PIO, pio_sm_config *config, uint sideset_base)
+{
+    smc_to_rp1(config, c);
+    valid_params_if(PIO, sideset_base < RP1_PIO_GPIO_COUNT);
+    c->pinctrl = (c->pinctrl & ~PROC_PIO_SM0_PINCTRL_SIDESET_BASE_BITS) |
+                 (sideset_base << PROC_PIO_SM0_PINCTRL_SIDESET_BASE_LSB);
+}
+
+static void rp1_smc_set_sideset_pin_count(PIO, pio_sm_config *config, uint sideset_count)
+{
+    smc_to_rp1(config, c);
+    valid_params_if(PIO, sideset_count <= 5);
+    c->pinctrl = (c->pinctrl & ~PROC_PIO_SM0_PINCTRL_SIDESET_COUNT_BITS) |
+                 (sideset_count << PROC_PIO_SM0_PINCTRL_SIDESET_COUNT_LSB);
+}
+
 static void rp1_smc_set_sideset(PIO, pio_sm_config *config, uint bit_count, bool optional, bool pindirs)
 {
     smc_to_rp1(config, c);
@@ -893,38 +984,10 @@ static void rp1_pio_interrupt_clear(PIO pio, uint pio_interrupt_num)
     (void)rp1_ioctl(pio, PIO_IOC_INTERRUPT_CLEAR, &args);
 }
 
-static void *irq_wait_thread(void *arg) {
-    RP1_PIO rp = (RP1_PIO)arg;
-    struct rp1_pio_irq_wait_args args;
-
-    args.timeout_ms = 0;
-    while (1) {
-        rp1_ioctl(&rp->base, PIO_IOC_IRQ_WAIT, &args);
-        if (!args.active_mask)
-            break;
-        printf("woke %x\n", args.active_mask);
-    }
-
-    return NULL;
-}
-
-static void rp1_pio_irq_start_thread(PIO pio) {
-    RP1_PIO rp = (RP1_PIO)pio;
-    pthread_mutex_lock(&rp->lock);
-    if (!rp->irq_thread_running) {
-        if (pthread_create(&rp->irq_thread, NULL, irq_wait_thread, rp))
-            pio_panic("Failed to create irq wait thread!");
-        rp->irq_thread_running = true;
-    }
-    pthread_mutex_unlock(&rp->lock);
-}
-
 static int rp1_pio_irq_claim(PIO pio)
 {
     struct rp1_pio_irq_claim_args args = { .irq_index = -1 };
     (void)rp1_ioctl(pio, PIO_IOC_IRQ_CLAIM, &args);
-    if (args.irq_index >= 0)
-        rp1_pio_irq_start_thread(pio);
     return args.irq_index;
 }
 
@@ -954,7 +1017,10 @@ static PIO rp1_create_instance(PIO_CHIP_T *chip, uint index)
     pio->base.chip = chip;
     pio->fd = -1;
     pio->devname = strdup(pathbuf);
-    pthread_mutex_init(&pio->lock, NULL);
+    if (!pio->devname) {
+        free(pio);
+        return PIO_ERR(-ENOMEM);
+    }
 
     return &pio->base;
 }
@@ -964,7 +1030,7 @@ static int rp1_open_instance(PIO pio)
     RP1_PIO rp = (RP1_PIO)pio;
     int fd;
 
-    fd = open(rp->devname, O_RDWR, O_CLOEXEC);
+    fd = open(rp->devname, O_RDWR | O_CLOEXEC);
     if (fd < 0)
         return -errno;
     rp->fd = fd;
@@ -975,6 +1041,8 @@ static void rp1_close_instance(PIO pio)
 {
     RP1_PIO rp = (RP1_PIO)pio;
     close(rp->fd);
+    /* Don't leave a stale descriptor that might end up referring to another file */
+    rp->fd = -1;
 }
 
 DECLARE_PIO_CHIP(rp1) {
@@ -990,6 +1058,7 @@ DECLARE_PIO_CHIP(rp1) {
     .close_instance = rp1_close_instance,
 
     .pio_sm_config_xfer = rp1_pio_sm_config_xfer,
+    .pio_sm_config_xfer_flags = rp1_pio_sm_config_xfer_flags,
     .pio_sm_xfer_data = rp1_pio_sm_xfer_data,
 
     .pio_can_add_program_at_offset = rp1_pio_can_add_program_at_offset,
@@ -1074,6 +1143,16 @@ DECLARE_PIO_CHIP(rp1) {
     .smc_set_fifo_join = rp1_smc_set_fifo_join,
     .smc_set_out_special = rp1_smc_set_out_special,
     .smc_set_mov_status = rp1_smc_set_mov_status,
+
+    /* Additions for V2 SDK */
+    .smc_set_out_pin_base = rp1_smc_set_out_pin_base,
+    .smc_set_out_pin_count = rp1_smc_set_out_pin_count,
+    .smc_set_set_pin_base = rp1_smc_set_set_pin_base,
+    .smc_set_set_pin_count = rp1_smc_set_set_pin_count,
+    .smc_set_in_pin_base = rp1_smc_set_in_pin_base,
+    .smc_set_in_pin_count = rp1_smc_set_in_pin_count,
+    .smc_set_sideset_pin_base = rp1_smc_set_sideset_pin_base,
+    .smc_set_sideset_pin_count = rp1_smc_set_sideset_pin_count,
 
     .clock_get_hz = rp1_clock_get_hz,
 

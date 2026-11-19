@@ -29,6 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <limits.h>
 #include <libfdt.h>
 #include <assert.h>
 
@@ -728,7 +729,7 @@ static int dtoverlay_apply_fixups(DTBLOB_T *dtb, const char *fixups_stringlist,
                                        offset_str - 1 - prop_name, &prop_len);
         if (!prop_ptr)
             return prop_len;
-        if ((int)offset > (prop_len - 4))
+        if ((prop_len < 4) || (offset > (unsigned long)(prop_len - 4)))
             return -FDT_ERR_BADSTRUCTURE;
 
         // Now apply the patch. Yes, prop_ptr is a const void *, but the
@@ -789,8 +790,8 @@ static int dtoverlay_apply_fixups_node(DTBLOB_T *dtb, int fix_off,
         for (off = 0; (off + 4) <= prop_len; off += 4)
         {
             uint32_t patch;
-            int patch_offset = dtoverlay_read_u32(prop_val, off);
-            if ((patch_offset + 4) > target_len)
+            uint32_t patch_offset = dtoverlay_read_u32(prop_val, off);
+            if ((target_len < 4) || (patch_offset > (uint32_t)(target_len - 4)))
                 return -FDT_ERR_BADSTRUCTURE;
 
             patch = phandle_offset + dtoverlay_read_u32(target_ptr, patch_offset);
@@ -1707,6 +1708,11 @@ int dtoverlay_override_one_target(int override_type,
         while (*p)
         {
             int c = *(p++);
+            if (q == unescaped_value + sizeof(unescaped_value) - 1)
+            {
+                dtoverlay_error("string '%s' too long", override_value);
+                return NON_FATAL(FDT_ERR_BADVALUE);
+            }
             if (c == '\\')
             {
                 c = *(p++);
@@ -2064,6 +2070,12 @@ int dtoverlay_foreach_override_target(DTBLOB_T *dtb, const char *override_name,
         int override_type;
         int node_off = 0;
 
+        if (strlen(override_value) >= sizeof(target_value))
+        {
+            dtoverlay_error("  override %s: value too long", override_name);
+            err = NON_FATAL(FDT_ERR_BADVALUE);
+            break;
+        }
         strcpy(target_value, override_value);
         override_type = dtoverlay_extract_override(override_name,
                                                    target_value, sizeof(target_value),
@@ -2092,6 +2104,12 @@ int dtoverlay_foreach_override_target(DTBLOB_T *dtb, const char *override_name,
         /* Sadly there are no '_namelen' setprop variants, so copies are required */
         if (target_prop)
         {
+            if (name_len >= (int)sizeof(prop_name))
+            {
+                dtoverlay_error("  override %s: property name too long", override_name);
+                err = NON_FATAL(FDT_ERR_BADVALUE);
+                break;
+            }
             memcpy(prop_name, target_prop, name_len);
             prop_name[name_len] = '\0';
         }
@@ -2242,7 +2260,13 @@ static int dtoverlay_extract_override(const char *override_name,
         else
         {
             /* The target is a cell/integer */
-            *offp = atoi(prop_name + name_len + 1);
+            long off = strtol(prop_name + name_len + 1, NULL, 10);
+            if (off < 0 || off > INT_MAX - 8)
+            {
+                dtoverlay_error("  override %s: bad offset", override_name);
+                return -FDT_ERR_BADSTRUCTURE;
+            }
+            *offp = (int)off;
             *sizep = 1 << (strchr(offset_seps, sep) - offset_seps);
             type = DTOVERRIDE_INTEGER;
             dtoverlay_debug("  override %s: cell target %.*s @ offset %d (size %d)",
@@ -2308,6 +2332,11 @@ static int dtoverlay_extract_override(const char *override_name,
                         data = override_end + 1;
                     }
                     *datap = data;
+                }
+                if ((int)strlen(literal_value) >= value_size)
+                {
+                    dtoverlay_error("  override %s: string too long", override_name);
+                    return -FDT_ERR_BADSTRUCTURE;
                 }
                 strcpy(override_value, literal_value);
             }

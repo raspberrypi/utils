@@ -98,7 +98,7 @@ static unsigned gencmd(int file_desc, const char *command, char *result, int res
    p[i++] = 0x00000000; // process request
 
    p[i++] = GET_GENCMD_RESULT; // (the tag id)
-   p[i++] = MAX_STRING;// buffer_len
+   p[i++] = MAX_STRING + 4; // buffer_len: response word + command/result
    p[i++] = 0; // request_len (set to response length)
    p[i++] = 0; // error repsonse
 
@@ -109,11 +109,8 @@ static unsigned gencmd(int file_desc, const char *command, char *result, int res
    p[0] = i*sizeof *p; // actual size
 
    mbox_property(file_desc, p);
-   len = strnlen((const char *)(p+6), MAX_STRING);
-   if (len >= result_len)
-      len = result_len - 1;
-   memcpy(result, p+6, len);
-   result[len] = 0;
+   result[0] = 0;
+   strncat(result, (const char *)(p+6), result_len - 1);
 
    return p[5];
 }

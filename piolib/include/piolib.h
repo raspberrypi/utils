@@ -65,6 +65,14 @@ enum pio_xfer_dir {
     PIO_DIR_COUNT
 };
 
+enum pio_dma_flags {
+    PIO_DMA_PREFER_HEAVY = (0 << 0),
+    PIO_DMA_PREFER_LIGHT = (1 << 0),
+    PIO_DMA_FORCE_HEAVY  = (2 << 0),
+    PIO_DMA_FORCE_LIGHT  = (3 << 0),
+    PIO_DMA_CYCLIC       = (1 << 2),
+};
+
 enum pio_sm_flags {
     PIO_SM_FLAG_TXSTALL = 0x0001,
     PIO_SM_FLAG_RXSTALL = 0x0002,
@@ -134,6 +142,7 @@ struct pio_chip {
     void (*close_instance)(PIO pio);
 
     int (*pio_sm_config_xfer)(PIO pio, uint sm, uint dir, uint buf_size, uint buf_count);
+    int (*pio_sm_config_xfer_flags)(PIO pio, uint sm, uint dir, uint buf_size, uint buf_count, uint flags);
     int (*pio_sm_xfer_data)(PIO pio, uint sm, uint dir, uint data_bytes, void *data);
 
     bool (*pio_can_add_program_at_offset)(PIO pio, const pio_program_t *program, uint offset);
@@ -237,6 +246,16 @@ struct pio_chip {
     void (*pio_interrupt_clear)(PIO pio, uint pio_interrupt_num);
     int  (*pio_irq_claim)(PIO pio);
     uint32_t (*pio_irq_wait)(PIO pio, uint timeout_ms);
+
+    /* Additions for V2 SDK */
+    void (*smc_set_out_pin_base)(PIO pio, pio_sm_config *c, uint out_base);
+    void (*smc_set_out_pin_count)(PIO pio, pio_sm_config *c, uint out_count);
+    void (*smc_set_set_pin_base)(PIO pio, pio_sm_config *c, uint set_base);
+    void (*smc_set_set_pin_count)(PIO pio, pio_sm_config *c, uint set_count);
+    void (*smc_set_in_pin_base)(PIO pio, pio_sm_config *c, uint in_base);
+    void (*smc_set_in_pin_count)(PIO pio, pio_sm_config *c, uint in_count);
+    void (*smc_set_sideset_pin_base)(PIO pio, pio_sm_config *c, uint sideset_base);
+    void (*smc_set_sideset_pin_count)(PIO pio, pio_sm_config *c, uint sideset_count);
 };
 
 struct pio_instance {
@@ -265,8 +284,24 @@ irq_handler_t irq_get_handler(uint num);
 void irq_set_enabled(uint num, bool enabled);
 bool irq_is_enabled(uint num);
 
+static inline void check_pio_param(__unused PIO pio)
+{
+    valid_params_if(PIO, pio_get_index(pio) >= 0);
+}
+
+static inline PIO pio_get_instance(uint instance)
+{
+    return pio_open_helper(instance);
+}
+
+static inline uint pio_get_funcsel(PIO pio) {
+    check_pio_param(pio);
+    return GPIO_FUNC_PIO0;
+}
+
 static inline void pio_error(PIO pio, const char *msg)
 {
+    check_pio_param(pio);
     pio->error = true;
     if (pio->errors_are_fatal)
         pio_panic(msg);
@@ -274,43 +309,56 @@ static inline void pio_error(PIO pio, const char *msg)
 
 static inline bool pio_get_error(PIO pio)
 {
+    check_pio_param(pio);
     return pio->error;
 }
 
 static inline void pio_clear_error(PIO pio)
 {
+    check_pio_param(pio);
     pio->error = false;
 }
 
 static inline void pio_enable_fatal_errors(PIO pio, bool enable)
 {
+    check_pio_param(pio);
     pio->errors_are_fatal = enable;
 }
 
 static inline uint pio_get_sm_count(PIO pio)
 {
+    check_pio_param(pio);
     return pio->chip->sm_count;
 }
 
 static inline uint pio_get_instruction_count(PIO pio)
 {
+    check_pio_param(pio);
     return pio->chip->instr_count;
 }
 
 static inline uint pio_get_fifo_depth(PIO pio)
 {
+    check_pio_param(pio);
     return pio->chip->fifo_depth;
 }
 
-static inline void check_pio_param(__unused PIO pio)
+static inline uint pio_get_gpio_base(PIO pio)
 {
-    valid_params_if(PIO, pio_get_index(pio) >= 0);
+    check_pio_param(pio);
+    return 0;
 }
 
 static inline int pio_sm_config_xfer(PIO pio, uint sm, uint dir, uint buf_size, uint buf_count)
 {
     check_pio_param(pio);
     return pio->chip->pio_sm_config_xfer(pio, sm, dir, buf_size, buf_count);
+}
+
+static inline int pio_sm_config_xfer_flags(PIO pio, uint sm, uint dir, uint buf_size, uint buf_count, uint flags)
+{
+    check_pio_param(pio);
+    return pio->chip->pio_sm_config_xfer_flags(pio, sm, dir, buf_size, buf_count, flags);
 }
 
 static inline int pio_sm_xfer_data(PIO pio, uint sm, uint dir, uint data_bytes, void *data)
@@ -794,6 +842,54 @@ static inline void sm_config_set_sideset(pio_sm_config *c, uint bit_count, bool 
 {
     PIO pio = pio_get_current();
     pio->chip->smc_set_sideset(pio, c, bit_count, optional, pindirs);
+}
+
+static inline void sm_config_set_out_pin_base(pio_sm_config *c, uint out_base)
+{
+    PIO pio = pio_get_current();
+    pio->chip->smc_set_out_pin_base(pio, c, out_base);
+}
+
+static inline void sm_config_set_out_pin_count(pio_sm_config *c, uint out_count)
+{
+    PIO pio = pio_get_current();
+    pio->chip->smc_set_out_pin_count(pio, c, out_count);
+}
+
+static inline void sm_config_set_set_pin_base(pio_sm_config *c, uint set_base)
+{
+    PIO pio = pio_get_current();
+    pio->chip->smc_set_set_pin_base(pio, c, set_base);
+}
+
+static inline void sm_config_set_set_pin_count(pio_sm_config *c, uint set_count)
+{
+    PIO pio = pio_get_current();
+    pio->chip->smc_set_set_pin_count(pio, c, set_count);
+}
+
+static inline void sm_config_set_in_pin_base(pio_sm_config *c, uint in_base)
+{
+    PIO pio = pio_get_current();
+    pio->chip->smc_set_in_pin_base(pio, c, in_base);
+}
+
+static inline void sm_config_set_in_pin_count(pio_sm_config *c, uint in_count)
+{
+    PIO pio = pio_get_current();
+    pio->chip->smc_set_in_pin_count(pio, c, in_count);
+}
+
+static inline void sm_config_set_sideset_pin_base(pio_sm_config *c, uint sideset_base)
+{
+    PIO pio = pio_get_current();
+    pio->chip->smc_set_sideset_pin_base(pio, c, sideset_base);
+}
+
+static inline void sm_config_set_sideset_pin_count(pio_sm_config *c, uint sideset_count)
+{
+    PIO pio = pio_get_current();
+    pio->chip->smc_set_sideset_pin_count(pio, c, sideset_count);
 }
 
 static inline void sm_config_set_clkdiv_int_frac(pio_sm_config *c, uint16_t div_int, uint8_t div_frac)

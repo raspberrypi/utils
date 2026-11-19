@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "piolib.h"
 
@@ -105,6 +106,27 @@ int main(int argc, const char **argv) {
 
     for (offset = 0; offset < pio_get_instruction_count(pio); offset++) {
         pio_remove_program(pio, &dummy_program, offset);
+    }
+
+    // V2 additions
+    {
+        pio_sm_config c1 = pio_get_default_sm_config();
+        pio_sm_config c2 = pio_get_default_sm_config();
+        sm_config_set_out_pins(&c1, 1, 2);
+        sm_config_set_out_pin_base(&c2, 1);
+        sm_config_set_out_pin_count(&c2, 2);
+        check("sm_config_set_out_pins", !memcmp(&c1, &c2, sizeof(c1)));
+        sm_config_set_in_pins(&c1, 3);
+        sm_config_set_in_pin_base(&c2, 3);
+        sm_config_set_in_pin_count(&c2, 32);
+        check("sm_config_set_in_pins", !memcmp(&c1, &c2, sizeof(c1)));
+        sm_config_set_set_pins(&c1, 4, 5);
+        sm_config_set_set_pin_base(&c2, 4);
+        sm_config_set_set_pin_count(&c2, 5);
+        check("sm_config_set_set_pins", !memcmp(&c1, &c2, sizeof(c1)));
+        sm_config_set_sideset_pins(&c1, 6);
+        sm_config_set_sideset_pin_base(&c2, 6);
+        check("sm_config_set_sideset_pins", !memcmp(&c1, &c2, sizeof(c1)));
     }
 
     offset = pio_add_program(pio, &echo_program);

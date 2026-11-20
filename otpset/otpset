@@ -96,7 +96,7 @@ def ReadOTP(args):
         if args.customer:
             if row >= customer_otp_offset and row < customer_otp_offset + 8:
                 print(row - customer_otp_offset, "0x{:08x} b'{:032b}".format(val, val))
-        else :
+        else:
             print(row, "0x{:08x} b'{:032b}  {}".format(val, val, row_info.get(row, "")))
 
 
@@ -125,7 +125,7 @@ def WriteOTP(args):
     for i, val in enumerate(args.data):
         cmd.append(hex(int(val, 0)))
 
-    if args.verbose :
+    if args.verbose:
         print('Setting {} rows of customer OTP from row {} onwards'.format(num_rows, first_row))
         print('Sending VC mailbox call: ',' '.join(cmd))
     
@@ -140,7 +140,7 @@ def LockOTP(args):
 
     cmd = ['vcmailbox', '0x00038021', '8', '8', '0xffffffff', '0xaffe0000' ]
 
-    if args.verbose :
+    if args.verbose:
         print('Sending VC mailbox call to lock OTP: ',' '.join(cmd))
 
     print("Are you ABSOLUTELY sure you want to permamently disable changes to the customer OTP?. This operation is IRREVERSIBLE. Type YES to confirm")
@@ -156,11 +156,11 @@ def LockOTP(args):
 
 args = ParseCommandLine()
 
-if args.customer or args.pi :
+if args.customer or args.pi:
     ReadOTP(args)
     sys.exit(0)
 
-if args.lock :
+if args.lock:
     LockOTP(args)
     sys.exit(0)
 

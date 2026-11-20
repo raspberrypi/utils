@@ -12,7 +12,6 @@ import sys
 
 
 customer_otp_offset = 36
-legacy_offset = 8
 
 def ParseCommandLine():
     parser = argparse.ArgumentParser(description='A helper application for reading and setting Raspberry Pi OTP (One Time Programmable) bits.\n Take care when using this application, changes to OTP are irreversible.', epilog="Script provided by Raspberry Pi Ltd under a BSD-3-Clause license")
@@ -43,7 +42,7 @@ def is_bcm2712():
 
 def ReadOTP(args):
 
-    # Map key is actually the value from the docs, so we do need to subtract/add the legacy_offset from it where necessary. 
+    # Map key is the row number from the docs, which matches the row number in otp_dump
     row_info = {
     17: "Bootmode register",
     18: "Bootmode register copy",

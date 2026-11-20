@@ -6,7 +6,7 @@
 # /proc/device-tree/chosen/power/power_reset. Events latched since boot are
 # read from the PMIC EVT status register via vcgencmd, if available.
 #
-# Usage: ./rpipmic
+# Usage: ./rpi-pmic
 
 set -eu
 

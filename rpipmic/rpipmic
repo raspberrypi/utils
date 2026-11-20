@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+#
+# Reports PMIC events on Raspberry Pi 5 (BCM2712) family devices.
+#
+# The bootloader clears fatal PMIC events at power on and passes them on in
+# /proc/device-tree/chosen/power/power_reset. Events latched since boot are
+# read from the PMIC EVT status register via vcgencmd, if available.
+#
+# Usage: ./rpipmic
+
+set -euo pipefail
+
+DT=/proc/device-tree
+POWER_RESET="$DT/chosen/power/power_reset"
+REG_ADDR="0x3018"
+
+# bit -> "NAME:description" for power_reset
+RESET_REASONS=(
+    "0:OVER_VOLTAGE: over voltage"
+    "1:UNDER_VOLTAGE: under voltage"
+    "2:OVER_TEMPERATURE: over temperature"
+    "3:ENABLE: chip reset/halt caused by a low on the ENABLE pin"
+    "4:WATCHDOG: watchdog timer timed out"
+)
+
+# bit -> "NAME:description" for the EVT register at REG_ADDR
+EVENTS=(
+    "0:EVT_PB_SHORT_PRESS: short press on the power button was detected"
+    "1:EVT_OVERTEMP_WARN: over-temperature warning"
+    "2:EVT_OVERTEMP_RESET: over-temperature reset occurred"
+    "3:EVT_WDT_RESET: watchdog timer timed out"
+    "4:EVT_ENABLE_LOW: chip reset/halt caused by a low on the ENABLE pin"
+    "5:EVT_UVLO_WARN: supply voltage fell below the warning threshold"
+    "6:EVT_UVLO_SHUT: last shutdown was caused by supply voltage falling below the critical threshold"
+    "7:EVT_VDD_SNS_OV: over-voltage detected on the VDD_SNS pin"
+)
+
+error_found=0
+
+report_bits() {
+    local value=$1
+    shift
+    local entry bit rest name desc found=0
+
+    for entry in "$@"; do
+        bit="${entry%%:*}"
+        rest="${entry#*:}"
+        name="${rest%%:*}"
+        desc="${rest#*:}"
+
+        if (( (value >> bit) & 1 )); then
+            echo "  [ERROR] $name -$desc"
+            found=1
+        fi
+    done
+
+    if (( found )); then
+        error_found=1
+    else
+        echo "  No error events detected."
+    fi
+}
+
+if ! tr '\0' '\n' < "$DT/compatible" 2>/dev/null | grep -qx 'brcm,bcm2712'; then
+    echo "error: this tool only supports the Raspberry Pi 5 family PMIC" >&2
+    exit 1
+fi
+
+if [[ -r "$POWER_RESET" ]]; then
+    reset_value=0
+    for byte in $(od -An -v -tu1 "$POWER_RESET"); do
+        reset_value=$(( (reset_value << 8) | byte ))
+    done
+    echo "PMIC reset reason at power on ($POWER_RESET) = 0x$(printf '%08x' "$reset_value")"
+    report_bits "$reset_value" "${RESET_REASONS[@]}"
+else
+    echo "warning: $POWER_RESET not found (bootloader too old?)" >&2
+fi
+
+if ! command -v vcgencmd >/dev/null 2>&1; then
+    echo "warning: vcgencmd not found, skipping PMIC EVT register" >&2
+    exit "$error_found"
+fi
+
+raw_output=$(vcgencmd pmicrd "$REG_ADDR" 2>&1 || true)
+
+# expected form: "[3018] = 00"
+hex_value=$(echo "$raw_output" | awk -F'=' '{print $2}' | tr -d '[:space:]')
+hex_value=${hex_value#0x}
+
+if [[ -z "$hex_value" || ! "$hex_value" =~ ^[0-9a-fA-F]+$ ]]; then
+    echo "warning: could not read PMIC EVT register: '$raw_output'" >&2
+    exit "$error_found"
+fi
+
+reg_value=$((16#$hex_value))
+
+echo "PMIC EVT register since boot ($REG_ADDR) = 0x$(printf '%02x' "$reg_value")"
+report_bits "$reg_value" "${EVENTS[@]}"
+
+exit "$error_found"

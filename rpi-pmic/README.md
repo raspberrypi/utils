@@ -1,4 +1,4 @@
-# rpipmic
+# rpi-pmic
 
 Tool to report PMIC events on Raspberry Pi 5 family devices (Pi 5, Pi 500,
 CM5).

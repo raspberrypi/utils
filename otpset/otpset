@@ -11,8 +11,34 @@ import subprocess
 import sys
 
 
-customer_otp_offset = 36
+# First customer OTP row in otp_dump
+customer_otp_offset = {
+    'bcm2711': 36,
+    'bcm2712': 77,
+}
 customer_otp_rows = 8
+
+otp_read_tag = 0x00030021
+otp_write_tag = 0x00038021
+
+# Canned "vcgencmd otp_dump" output for --fake, per SoC. The BCM2712 dump
+# starts at row 0, skips rows 61-76 and 93-108, and has three digit rows.
+fake_otp_dump = {
+    'bcm2711': b'08:00000000\n09:00000000\n10:00000000\n11:00000000\n12:00000000\n13:00000000\n14:00000000\n15:00000000\n16:00280000\n17:000008b0\n18:000008b0\n19:ffffffff\n20:ffffffff\n21:ffffffff\n22:ffffffff\n23:ffffffff\n24:ffffffff\n25:ffffffff\n26:ffffffff\n27:00005d5d\n28:58d2eb5c\n29:a72d14a3\n30:00c03111\n31:00000000\n32:00000000\n33:00000000\n34:00000000\n35:00000000\n36:00000000\n37:00000000\n38:00000000\n39:00000000\n40:00000000\n41:00000000\n42:00000000\n43:00000000\n44:00000000\n45:00000000\n46:00000000\n47:00000000\n48:00000000\n49:00000000\n50:00000000\n51:00000000\n52:00000000\n53:00000000\n54:00000000\n55:00000000\n56:00000000\n57:00000000\n58:00000000\n59:00000000\n60:00000000\n61:00000000\n62:00000000\n63:00000000\n64:00650000\n65:00000000\n66:00000000\n',
+    'bcm2712': (
+    b'00:00000000\n01:00000000\n02:00000000\n03:00000000\n04:00000000\n05:00000000\n06:00000000\n07:00000000\n'
+    b'08:00000000\n09:00000000\n10:00000000\n11:00000000\n12:00000000\n13:00000000\n14:00000000\n15:00000000\n'
+    b'16:00000000\n17:00000000\n18:00000000\n19:00000000\n20:00000000\n21:00000000\n22:0000000a\n23:0000000a\n'
+    b'24:00000000\n25:00000000\n26:00000000\n27:00000000\n28:00000000\n29:00009400\n30:0000b900\n31:12345678\n'
+    b'32:00c04171\n33:00000000\n34:00000005\n35:9abcdef0\n36:00000007\n37:00000000\n38:00000000\n39:00000000\n'
+    b'40:00000000\n41:00000000\n42:00000000\n43:00000000\n44:00000000\n45:00000001\n46:00000000\n47:00000000\n'
+    b'48:00000000\n49:00000000\n50:34560000\n51:88a29e12\n52:34560000\n53:88a29e12\n54:34560000\n55:88a29e12\n'
+    b'56:00000000\n57:00000000\n58:00000000\n59:00000000\n60:00000000\n'
+    b'77:00000000\n78:00000000\n79:00000000\n80:00000000\n81:00000000\n82:00000000\n83:10009110\n84:10437591\n'
+    b'85:00000000\n86:00000000\n87:00000000\n88:00000000\n89:00000000\n90:00000000\n91:00000000\n92:00000000\n'
+    b'109:01234567\n110:89abcdef\n111:76543210\n112:00000000\n113:00000000\n114:00000000\n'
+    ),
+}
 
 def ParseCommandLine():
     parser = argparse.ArgumentParser(description='A helper application for reading and setting Raspberry Pi OTP (One Time Programmable) bits.\n Take care when using this application, changes to OTP are irreversible.', epilog="Script provided by Raspberry Pi Ltd under a BSD-3-Clause license")
@@ -26,15 +52,56 @@ def ParseCommandLine():
     parser.add_argument("--yes", action='store_true', help="Make changes to OTP (without this a dry run is done). WARNING: Changes to OTP are irreversible")
     parser.add_argument("--lock", action='store_true', help="Permanently disable writing to customer OTP. WARNING: This operation is irreversible")
 
-    parser.add_argument("-f", "--fake", action='store_true', help="Use fake data for testing")
+    parser.add_argument("-f", "--fake", action='store_true', help="Use fake data for testing. Nothing is written to OTP")
+    parser.add_argument("--fake-soc", choices=sorted(fake_otp_dump), help="SoC to fake (default bcm2711). Implies --fake")
 
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
         sys.exit(1)
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.fake_soc:
+        args.fake = True
+    elif args.fake:
+        args.fake_soc = 'bcm2711'
 
-def is_bcm2712():
+    return args
+
+def parse_otp_dump(dump):
+    # Each line is "<row>:<value>"; rows are not contiguous and can have three digits
+    for line in dump.splitlines():
+        row, sep, val = line.partition(b":")
+        if sep:
+            yield int(row), int(val, base=16)
+
+def fake_customer_otp(soc):
+    # Take the customer rows from the fake otp_dump so the two are consistent
+    rows = dict(parse_otp_dump(fake_otp_dump[soc]))
+    return [rows[customer_otp_offset[soc] + i] for i in range(customer_otp_rows)]
+
+def RunCommand(args, cmd):
+    if not args.fake:
+        return subprocess.check_output(cmd)
+
+    if cmd == ['vcgencmd', 'otp_dump']:
+        return fake_otp_dump[args.fake_soc]
+
+    if cmd[0] == 'vcmailbox' and int(cmd[1], 0) == otp_read_tag:
+        size, start, num = (int(cmd[i], 0) for i in (2, 4, 5))
+        values = fake_customer_otp(args.fake_soc)[start:start + num]
+        words = [24 + size, 0x80000000, otp_read_tag, size, 0x80000000 | (8 + num * 4), start, num] + values + [0]
+        return (' '.join('0x{:08x}'.format(w) for w in words) + '\n').encode()
+
+    if cmd[0] == 'vcmailbox' and int(cmd[1], 0) == otp_write_tag:
+        # Never change the OTP when using fake data
+        print('Faking VC mailbox call: ', ' '.join(cmd))
+        return b''
+
+    raise ValueError('No fake output for: ' + ' '.join(cmd))
+
+def is_bcm2712(args):
+    if args.fake:
+        return args.fake_soc == 'bcm2712'
     try:
         with open('/proc/device-tree/compatible', 'rb') as f:
             return b'bcm2712' in f.read()
@@ -66,40 +133,61 @@ def ReadOTP(args):
     66: "Advanced boot mode",
     }
 
-    if args.fake: 
-        result = b'08:00000000\n09:00000000\n10:00000000\n11:00000000\n12:00000000\n13:00000000\n14:00000000\n15:00000000\n16:00280000\n17:000008b0\n18:000008b0\n19:ffffffff\n20:ffffffff\n21:ffffffff\n22:ffffffff\n23:ffffffff\n24:ffffffff\n25:ffffffff\n26:ffffffff\n27:00005d5d\n28:58d2eb5c\n29:a72d14a3\n30:00c03111\n31:00000000\n32:00000000\n33:00000000\n34:00000000\n35:00000000\n36:00000000\n37:00000000\n38:00000000\n39:00000000\n40:00000000\n41:00000000\n42:00000000\n43:00000000\n44:00000000\n45:00000000\n46:00000000\n47:00000000\n48:00000000\n49:00000000\n50:00000000\n51:00000000\n52:00000000\n53:00000000\n54:00000000\n55:00000000\n56:00000000\n57:00000000\n58:00000000\n59:00000000\n60:00000000\n61:00000000\n62:00000000\n63:00000000\n64:00650000\n65:00000000\n66:00000000\n'
-    else:
-        if args.customer:
-            # The customer rows are not at a fixed place in otp_dump on every
-            # SoC (BCM2712 starts the dump at row 0 and uses a different
-            # layout), so ask the firmware for them directly
-            num_bytes = str(8 + customer_otp_rows * 4)
-            customer = subprocess.check_output(['vcmailbox', '0x00030021', num_bytes, num_bytes, '0', str(customer_otp_rows)] + ['0'] * customer_otp_rows).split()
-            for i, val in enumerate(customer[7:7 + customer_otp_rows]):
-                val = int(val, base=16)
-                print(i, "0x{:08x} b'{:032b}".format(val, val))
-            return
+    # BCM2712 has a different layout
+    row_info_bcm2712 = {
+    22: "Boot ROM row",
+    23: "Boot ROM row copy",
+    31: "Serial number (low)",
+    32: "Revision code",
+    33: "Board attributes",
+    34: "SDRAM config",
+    35: "Serial number (high)",
+    50: "Ethernet MAC address",
+    51: "Ethernet MAC address",
+    52: "Wi-Fi MAC address",
+    53: "Wi-Fi MAC address",
+    54: "Bluetooth MAC address",
+    55: "Bluetooth MAC address",
+    77: "Customer OTP Row 0",
+    78: "Customer OTP Row 1",
+    79: "Customer OTP Row 2",
+    80: "Customer OTP Row 3",
+    81: "Customer OTP Row 4",
+    82: "Customer OTP Row 5",
+    83: "Customer OTP Row 6",
+    84: "Customer OTP Row 7",
+    87: "Customer Ethernet MAC address",
+    88: "Customer Ethernet MAC address",
+    89: "Customer Wi-Fi MAC address",
+    90: "Customer Wi-Fi MAC address",
+    91: "Customer Bluetooth MAC address",
+    92: "Customer Bluetooth MAC address",
+    }
 
-        result = subprocess.check_output(['vcgencmd', 'otp_dump'])
+    if args.customer:
+        # The customer rows are not at a fixed place in otp_dump on every
+        # SoC (BCM2712 starts the dump at row 0 and uses a different
+        # layout), so ask the firmware for them directly
+        num_bytes = str(8 + customer_otp_rows * 4)
+        customer = RunCommand(args, ['vcmailbox', hex(otp_read_tag), num_bytes, num_bytes, '0', str(customer_otp_rows)] + ['0'] * customer_otp_rows).split()
+        for i, val in enumerate(customer[7:7 + customer_otp_rows]):
+            val = int(val, base=16)
+            print(i, "0x{:08x} b'{:032b}".format(val, val))
+        return
 
-    # The row numbers above only describe the BCM2711 and earlier layout
-    if not args.fake and is_bcm2712():
-        row_info = {}
+    if is_bcm2712(args):
+        row_info = row_info_bcm2712
 
-    # Each line is "<row>:<value>"; rows are not contiguous and can have three digits
-    for line in result.splitlines():
-        row, sep, val = line.partition(b":")
-        if not sep:
-            continue
-        row = int(row)
-        val = int(val, base=16)
+    for row, val in parse_otp_dump(RunCommand(args, ['vcgencmd', 'otp_dump'])):
+        print(row, "0x{:08x} b'{:032b}  {}".format(val, val, row_info.get(row, "")))
 
-        if args.customer:
-            if row >= customer_otp_offset and row < customer_otp_offset + customer_otp_rows:
-                print(row - customer_otp_offset, "0x{:08x} b'{:032b}".format(val, val))
-        else:
-            print(row, "0x{:08x} b'{:032b}  {}".format(val, val, row_info.get(row, "")))
 
+def Confirm(args, prompt):
+    # Fake writes can't change anything, so don't ask
+    if args.fake:
+        return True
+    print(prompt)
+    return input() == 'YES'
 
 def WriteOTP(args):
 
@@ -108,9 +196,7 @@ def WriteOTP(args):
 
 # Format of the mailbox call is 
 # vcmailbox <command> [8 + number * 4] [8 + number * 4] [start_num] [number] [value] [value] [value] ...
-# write command is 0x00038021
-
-    write_cmd = 0x00038021
+# write command is otp_write_tag (0x00038021)
 
     num_rows = len(args.data)
     first_row = 0 if args.row == -1 else args.row
@@ -121,34 +207,31 @@ def WriteOTP(args):
 
     num_bytes = (num_rows * 4) + 8
   
-    cmd = ['vcmailbox', hex(write_cmd), str(num_bytes), str(num_bytes), str(first_row), str(num_rows) ]
+    cmd = ['vcmailbox', hex(otp_write_tag), str(num_bytes), str(num_bytes), str(first_row), str(num_rows) ]
 
     for i, val in enumerate(args.data):
         cmd.append(hex(int(val, 0)))
 
     if args.verbose:
         print('Setting {} rows of customer OTP from row {} onwards'.format(num_rows, first_row))
-        print('Sending VC mailbox call: ',' '.join(cmd))
+        # A fake write prints the call itself
+        if not (args.fake and args.yes):
+            print('Sending VC mailbox call: ',' '.join(cmd))
     
     if args.yes:
-        print("Are you ABSOLUTELY sure you want to make changes to the customer OTP?. This operation is IRREVERSIBLE. Type YES to confirm")
-        confirm = input()
-
-        if confirm == 'YES':
-            result = subprocess.check_output(cmd)
+        if Confirm(args, "Are you ABSOLUTELY sure you want to make changes to the customer OTP?. This operation is IRREVERSIBLE. Type YES to confirm"):
+            RunCommand(args, cmd)
 
 def LockOTP(args):
 
-    cmd = ['vcmailbox', '0x00038021', '8', '8', '0xffffffff', '0xaffe0000' ]
+    cmd = ['vcmailbox', hex(otp_write_tag), '8', '8', '0xffffffff', '0xaffe0000' ]
 
-    if args.verbose:
+    # A fake lock prints the call itself
+    if args.verbose and not args.fake:
         print('Sending VC mailbox call to lock OTP: ',' '.join(cmd))
 
-    print("Are you ABSOLUTELY sure you want to permamently disable changes to the customer OTP?. This operation is IRREVERSIBLE. Type YES to confirm")
-    confirm = input()
-
-    if confirm == 'YES':
-        result = subprocess.check_output(cmd)
+    if Confirm(args, "Are you ABSOLUTELY sure you want to permamently disable changes to the customer OTP?. This operation is IRREVERSIBLE. Type YES to confirm"):
+        RunCommand(args, cmd)
 
 
 

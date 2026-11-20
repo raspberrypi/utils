@@ -12,12 +12,13 @@ import sys
 
 
 customer_otp_offset = 36
+customer_otp_rows = 8
 
 def ParseCommandLine():
     parser = argparse.ArgumentParser(description='A helper application for reading and setting Raspberry Pi OTP (One Time Programmable) bits.\n Take care when using this application, changes to OTP are irreversible.', epilog="Script provided by Raspberry Pi Ltd under a BSD-3-Clause license")
     parser.add_argument("data", nargs="*", type=str, help="Customer OTP data to set. 1 to 8 32 bit values. Can be decimal, hex (0x...), or binary (0b...)")
 
-    parser.add_argument("-r", "--row", type=int, help="Customer OTP start row. Valid values are 0 to 7", default=-1, choices=range(0,8), metavar="0-7")
+    parser.add_argument("-r", "--row", type=int, help="Customer OTP start row. Valid values are 0 to 7", default=-1, choices=range(0,customer_otp_rows), metavar="0-7")
     
     parser.add_argument("-c", "--customer", action='store_true', help="Read customer OTP bits")
     parser.add_argument("-p", "--pi", action='store_true', help="Read Raspberry Pi OTP bits")
@@ -72,8 +73,9 @@ def ReadOTP(args):
             # The customer rows are not at a fixed place in otp_dump on every
             # SoC (BCM2712 starts the dump at row 0 and uses a different
             # layout), so ask the firmware for them directly
-            customer = subprocess.check_output(['vcmailbox', '0x00030021', '40', '40', '0', '8'] + ['0'] * 8).split()
-            for i, val in enumerate(customer[7:15]):
+            num_bytes = str(8 + customer_otp_rows * 4)
+            customer = subprocess.check_output(['vcmailbox', '0x00030021', num_bytes, num_bytes, '0', str(customer_otp_rows)] + ['0'] * customer_otp_rows).split()
+            for i, val in enumerate(customer[7:7 + customer_otp_rows]):
                 val = int(val, base=16)
                 print(i, "0x{:08x} b'{:032b}".format(val, val))
             return
@@ -93,7 +95,7 @@ def ReadOTP(args):
         val = int(val, base=16)
 
         if args.customer:
-            if row >= customer_otp_offset and row < customer_otp_offset + 8:
+            if row >= customer_otp_offset and row < customer_otp_offset + customer_otp_rows:
                 print(row - customer_otp_offset, "0x{:08x} b'{:032b}".format(val, val))
         else:
             print(row, "0x{:08x} b'{:032b}  {}".format(val, val, row_info.get(row, "")))
@@ -113,7 +115,7 @@ def WriteOTP(args):
     num_rows = len(args.data)
     first_row = 0 if args.row == -1 else args.row
 
-    if (num_rows < 1 or num_rows > 8 - first_row):
+    if (num_rows < 1 or num_rows > customer_otp_rows - first_row):
         print("Invalid combination of start row ({}) and number of words to write to OTP ({})". format(first_row, num_rows))
         sys.exit(-1)
 

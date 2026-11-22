@@ -1,0 +1,3 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+exec @Python3_EXECUTABLE@ "@CMAKE_INSTALL_FULL_LIBEXECDIR@/rp1-ptp-pps/rp1_pps.py" "$@"

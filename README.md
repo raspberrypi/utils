@@ -22,6 +22,7 @@ A collection of scripts and simple applications
 * [piolib](piolib/) - A library for accessing the Pi 5's PIO hardware.
 * [raspinfo](raspinfo/) - A short script to dump information about the Pi. Intended for
     the submission of bug reports.
+* [rp1-ptp-pps](rp1-ptp-pps/) - PTP timestamp input and PPS output on the RP1 Ethernet PHC.
 * [rpieepromab](rpieepromab/) - A tool to update and manage the AB EEPROM partitions
     on a device in the Pi 5 family.
 * [rpifwcrypto](rpifwcrypto/) - A command line application and shared library for the

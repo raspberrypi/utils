@@ -716,6 +716,8 @@ def find_prop_chunk(node, propname, offset, size, ovrname, create):
             end = pos + len(chunk[1]) + 1
         elif typ == '[':
             end = pos + len(chunk[2])
+        elif typ == 'm':
+            raise OvMergeError(f"* Can't override '{ovrname}' - property {propname} contains macro '{chunk[1]}'")
         else:
             end = pos + chunk[1] * len(chunk[2])
         if offset < end:
@@ -1373,6 +1375,8 @@ def dump_node(node, depth, out):
                 terms.append('"' + chunk[1] + '"')
             elif chunk[0] == '&':
                 terms.append('&' + chunk[1])
+            elif chunk[0] == 'm':
+                terms.append(chunk[1])
             elif chunk[0] == '<':
                 prefix = ("/bits/ %d " % (chunk[1] * 8)) if chunk[1] != 4 else ''
                 terms.append(prefix + '<' + ' '.join(str(v) for v in chunk[2]) + '>')
@@ -1754,6 +1758,16 @@ def parse_node(ps, parent, depth, node, *newlabels):
                         next_tok = match(ps, next_tok)
                     elif next_tok is not None and re.fullmatch(r'&(.*)', next_tok):
                         prop.append(['&', next_tok[1:]])
+                        next_tok = match(ps, next_tok)
+                    elif next_tok is not None and re.fullmatch(r'[A-Z_][A-Z0-9_]*,?', next_tok):
+                        # A macro from an unparsed header (e.g. LED_FUNCTION_LAN
+                        # from dt-bindings/leds/common.h) - keep it symbolic.
+                        # The tokeniser absorbs a trailing comma, so split it off.
+                        if next_tok.endswith(','):
+                            next_tok = next_tok[:-1]
+                            ps.tokens[ps.pos] = next_tok
+                            ps.tokens.insert(ps.pos + 1, ',')
+                        prop.append(['m', next_tok])
                         next_tok = match(ps, next_tok)
                     elif next_tok == '<' or next_tok == '/bits/':
                         elemsize = 4

@@ -36,7 +36,9 @@ set(INCLUDE_FILES
     "pico/stdlib.h"
 )
 
-install(TARGETS pio ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT piolib)
+install(TARGETS pio
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT piolib
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT piolib)
 
 # pkg-config file; packagers can set PIOLIB_VERSION to the package version
 set(PIOLIB_VERSION "0" CACHE STRING "Version reported by libpio.pc")

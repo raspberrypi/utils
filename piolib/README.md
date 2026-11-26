@@ -8,6 +8,8 @@ Install the prerequisites with `sudo apt install build-essential cmake` - you ne
 
 1. `cmake .` (or create a build subdirectory and run `cmake ..`)
     N.B. Use *cmake -DBUILD_SHARED_LIBS=1 .* to build piolib as a shared (as opposed to static) library.
+    The example programs are built but not installed; add *-DPIOLIB_INSTALL_EXAMPLES=ON* to install them too.
+    The default install prefix is /usr/local, which takes precedence over the packaged libpio; to try a build without displacing it, install to a private prefix (e.g. *-DCMAKE_INSTALL_PREFIX=$HOME/.local*) and point PKG_CONFIG_PATH and LD_LIBRARY_PATH at it.
 2. `make`
 
 If `ls -l /dev/pio0` reports that the file is not found, you may need to update your Pi 5 firmware to one with PIO support and make sure that you are running a suitably recent kernel.

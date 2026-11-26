@@ -35,6 +35,13 @@ set(INCLUDE_FILES
 )
 
 install(TARGETS pio ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT piolib)
+
+# pkg-config file; packagers can set PIOLIB_VERSION to the package version
+set(PIOLIB_VERSION "0" CACHE STRING "Version reported by libpio.pc")
+configure_file(libpio.pc.in libpio.pc @ONLY)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libpio.pc"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig" COMPONENT piolib)
+
 foreach ( file ${INCLUDE_FILES} )
     get_filename_component( dir ${file} DIRECTORY )
     install( FILES "include/${file}" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/piolib/${dir}" COMPONENT piolib)

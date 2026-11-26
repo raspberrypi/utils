@@ -1,11 +1,13 @@
 cmake_minimum_required(VERSION 3.10...3.27)
 
+#set project name
+project(piolib)
+
+# After project(), so that the target architecture (and hence the Debian
+# multiarch library directory) is known
 include(GNUInstallDirs)
 
 add_subdirectory(examples)
-
-#set project name
-project(piolib)
 
 add_compile_definitions(LIBRARY_BUILD=1)
 

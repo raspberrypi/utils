@@ -7,6 +7,10 @@ project(piolib)
 # multiarch library directory) is known
 include(GNUInstallDirs)
 
+# The examples are always built, but are only installed on request, so
+# that a local install does not put them on everyone's PATH
+option(PIOLIB_INSTALL_EXAMPLES "Install the piolib example programs" OFF)
+
 add_subdirectory(examples)
 
 add_compile_definitions(LIBRARY_BUILD=1)

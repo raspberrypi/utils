@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.10...3.27)
 
-include(GNUInstallDirs)
-
 #set project name
 project(examples)
+
+include(GNUInstallDirs)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
 option(ENABLE_WERROR "Treat compiler warnings as errors" OFF)

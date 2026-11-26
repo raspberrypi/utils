@@ -1,0 +1,11 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: libpio
+Description: Library for accessing Raspberry Pi 5 PIO hardware
+Version: @PIOLIB_VERSION@
+Libs: -L${libdir} -lpio
+Libs.private: -lpthread
+Cflags: -I${includedir}/piolib
